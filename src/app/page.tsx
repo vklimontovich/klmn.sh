@@ -1,0 +1,125 @@
+import { InlineHighlight } from "@/components/inline-highlight";
+import {
+  FacebookLogo,
+  GetIntentLogo,
+  JitsuLogo,
+  LinkedInLogo,
+  TelegramLogo,
+  TwitterLogo,
+  YCombinatorLogo,
+} from "@/components/icons";
+import { Header } from "@/components/header";
+import Link from "next/link";
+import Image from "next/image";
+import headshot from "@/assets/headshot.jpg";
+import { TextPage } from "@/components/text-page";
+import { Github, MapPin, Twitter } from "lucide-react";
+import { ReactNode } from "react";
+
+const AvatarLink: React.FC<{ href?: string; children: ReactNode; icon: ReactNode }> = ({ href, children, icon }) => {
+  const content = (
+    <div className="flex items-center flex-nowrap text-sm text-zinc-600 group">
+      <span className="h-4 w-4 group-hover:text-zinc-900 group-hover:scale-105">{icon}</span>
+      <span className="ml-1">{children}</span>
+    </div>
+  );
+  return href ? <Link href={href}>{content}</Link> : content;
+};
+
+export default function Home() {
+  return (
+    <main className="flex min-h-screen flex-col md:flex-row md:items-start justify-start md:justify-center py-10 md:py-16 px-6 md:px-12">
+      <section className="shrink md:mr-6 flex flex-col items-center md:items-start min-w-fit">
+        <Link href={"/"}>
+          <Image src={headshot} alt="photo" className="rounded-full h-24 w-24 md:h-32 md:w-32" />
+        </Link>
+
+        <section className="flex flex-row  md:flex-col gap-2 mt-6 mb-6">
+          <AvatarLink icon={<MapPin className="h-full w-full" />}>New York</AvatarLink>
+          <AvatarLink
+            icon={
+              <span className="grayscale">
+                {" "}
+                <JitsuLogo />
+              </span>
+            }
+            href="https://jitsu.com"
+          >
+            Jitsu
+          </AvatarLink>
+          <AvatarLink icon={<Twitter className="h-full w-full" />} href="https://twitter.com/vl_klmn">
+            vl_klmn
+          </AvatarLink>
+          <AvatarLink icon={<Github className="h-full w-full" />} href="https://github.com/vklimontovich">
+            vklimontovich
+          </AvatarLink>
+        </section>
+      </section>
+
+      <TextPage className="">
+        <h1>Hi, I{"'"}m Vladimir Klimontovich 👋</h1>
+        <p>
+          I{"'"}m a tech entrepreneur and product engineer. I{"'"}m currently a founder{" "}
+          <InlineHighlight href="https://jitsu.com" icon={<JitsuLogo />}>
+            Jitsu
+          </InlineHighlight>{" "}
+          (YC S20). Before I was a co-founder of{" "}
+          <InlineHighlight href={"https://getintent.com"} icon={<GetIntentLogo />}>
+            GetIntent
+          </InlineHighlight>{" "}
+          (acquired). I{"'"}m passionate about data, analytics and building products. You can reach me at{" "}
+          <InlineHighlight>v@klmn.io</InlineHighlight>
+        </p>
+        I maintain some social media presence:{" "}
+        <InlineHighlight href="https://twitter.com/vklimontovich" icon={<TwitterLogo />}>
+          vl_klmn
+        </InlineHighlight>
+        ,{" "}
+        <InlineHighlight href="https://www.linkedin.com/in/klimontovich/" icon={<LinkedInLogo />}>
+          Linked In
+        </InlineHighlight>
+        ,{" "}
+        <InlineHighlight href="https://facebook.com/klimontovich" icon={<FacebookLogo />}>
+          Facebook
+        </InlineHighlight>
+        . I write about startups and tech on{" "}
+        <InlineHighlight href="https://t.me/termsheet" icon={<TelegramLogo />}>
+          Telegram
+        </InlineHighlight>{" "}
+        in Russian
+        <Header id="jitsu" level="h2">
+          About Jitsu
+        </Header>
+        <p>
+          <InlineHighlight href="https://jitsu.com" icon={<JitsuLogo />}>
+            Jitsu
+          </InlineHighlight>{" "}
+          is an open-source tool for capturing customer data and saving it to data warehouses. Customer data can be
+          either streamed from apps, or pulled from external services with{" "}
+          <Link href="https://jitsu.com/integrations/connectors">Jitsu Connectors</Link>.
+        </p>
+        <p>
+          We{"'"}re VC-backed by{" "}
+          <InlineHighlight href="https://ycombinator.com" icon={<YCombinatorLogo />}>
+            Y Combinator
+          </InlineHighlight>
+          , <InlineHighlight href="https://costanoa.vc/">Costanoa Ventures</InlineHighlight> and few other investors.
+        </p>
+        <Header id="jitsu" level="h2">
+          About GetIntent
+        </Header>
+        <p>
+          <InlineHighlight href={"https://getintent.com"} icon={<GetIntentLogo />}>
+            GetIntent
+          </InlineHighlight>{" "}
+          is (was?) an online advertising platform for buying online ads from{" "}
+          <Link href="https://en.wikipedia.org/wiki/Real-time_bidding">real-time online auctions (aka RTB)</Link>
+        </p>
+        <p>
+          I co-founded GetIntent in 2013 and was a CTO, and later COO until 2018 when I left. The company was acquired
+          in 2019.
+        </p>
+      </TextPage>
+    </main>
+  );
+}
