@@ -1,7 +1,11 @@
-export const JitsuLogo: React.FC = () => {
+export type LogoOpts = {
+  mono?: boolean;
+};
+
+export const JitsuLogo: React.FC<LogoOpts> = ({ mono }) => {
   return (
     <svg width="100%" height="100%" viewBox="0 0 87 87" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="43.5" cy="43.5" r="43.5" fill="#AA00FF"></circle>
+      <circle cx="43.5" cy="43.5" r="43.5" fill={mono ? "currentColor" : "#AA00FF"}></circle>
       <path
         d="M60 44.9221C59.9986 49.1858 58.3012 53.2744 55.2809 56.2893C52.2606 59.3042 48.1647 60.9986 43.8934 61H27V44.9221H43.8934V26H60V44.9221Z"
         fill="white"
@@ -33,10 +37,10 @@ export const GetIntentLogo: React.FC = () => {
   );
 };
 
-export const TwitterLogo: React.FC = () => {
+export const TwitterLogo: React.FC<LogoOpts> = ({ mono }) => {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="126.444 2.281 589 589">
-      <circle cx="420.944" cy="296.781" r="294.5" fill="#2daae1" />
+      <circle cx="420.944" cy="296.781" r="294.5" fill={mono ? "currentColor" : "#2daae1"} />
       <path
         d="M609.773 179.634c-13.891 6.164-28.811 10.331-44.498 12.204 16.01-9.587 28.275-24.779 34.066-42.86a154.78 154.78 0 0 1-49.209 18.801c-14.125-15.056-34.267-24.456-56.551-24.456-42.773 0-77.462 34.675-77.462 77.473 0 6.064.683 11.98 1.996 17.66-64.389-3.236-121.474-34.079-159.684-80.945-6.672 11.446-10.491 24.754-10.491 38.953 0 26.875 13.679 50.587 34.464 64.477a77.122 77.122 0 0 1-35.097-9.686v.979c0 37.54 26.701 68.842 62.145 75.961-6.511 1.784-13.344 2.716-20.413 2.716-4.998 0-9.847-.473-14.584-1.364 9.859 30.769 38.471 53.166 72.363 53.799-26.515 20.785-59.925 33.175-96.212 33.175-6.25 0-12.427-.373-18.491-1.104 34.291 21.988 75.006 34.824 118.759 34.824 142.496 0 220.428-118.052 220.428-220.428 0-3.361-.074-6.697-.236-10.021a157.855 157.855 0 0 0 38.707-40.158z"
         fill="#fff"
@@ -60,7 +64,7 @@ export const LinkedInLogo: React.FC = () => {
   );
 };
 
-export const TelegramLogo: React.FC = () => {
+export const TelegramLogo: React.FC<LogoOpts> = ({mono}) => {
   return (
     <svg
       id="Livello_1"
@@ -77,7 +81,7 @@ export const TelegramLogo: React.FC = () => {
         </linearGradient>
       </defs>
       <title>Telegram_logo</title>
-      <circle cx="120" cy="120" r="120" fill="url(#linear-gradient)" />
+      <circle cx="120" cy="120" r="120" fill={mono ? "currentColor": "url(#linear-gradient)"} />
       <path
         d="M81.229,128.772l14.237,39.406s1.78,3.687,3.686,3.687,30.255-29.492,30.255-29.492l31.525-60.89L81.737,118.6Z"
         fill="#c8daea"
@@ -134,6 +138,15 @@ export const YCombinatorLogo: React.FC = () => {
           fill="#FFFFFF"
         ></path>
       </g>
+    </svg>
+  );
+};
+
+export const GithubLogo: React.FC<LogoOpts> = ({mono}) => {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="2 2 20 20">
+      <path d="M10.9,2.1c-4.6,0.5-8.3,4.2-8.8,8.7c-0.5,4.7,2.2,8.9,6.3,10.5C8.7,21.4,9,21.2,9,20.8v-1.6c0,0-0.4,0.1-0.9,0.1 c-1.4,0-2-1.2-2.1-1.9c-0.1-0.4-0.3-0.7-0.6-1C5.1,16.3,5,16.3,5,16.2C5,16,5.3,16,5.4,16c0.6,0,1.1,0.7,1.3,1c0.5,0.8,1.1,1,1.4,1 c0.4,0,0.7-0.1,0.9-0.2c0.1-0.7,0.4-1.4,1-1.8c-2.3-0.5-4-1.8-4-4c0-1.1,0.5-2.2,1.2-3C7.1,8.8,7,8.3,7,7.6c0-0.4,0-0.9,0.2-1.3 C7.2,6.1,7.4,6,7.5,6c0,0,0.1,0,0.1,0C8.1,6.1,9.1,6.4,10,7.3C10.6,7.1,11.3,7,12,7s1.4,0.1,2,0.3c0.9-0.9,2-1.2,2.5-1.3 c0,0,0.1,0,0.1,0c0.2,0,0.3,0.1,0.4,0.3C17,6.7,17,7.2,17,7.6c0,0.8-0.1,1.2-0.2,1.4c0.7,0.8,1.2,1.8,1.2,3c0,2.2-1.7,3.5-4,4 c0.6,0.5,1,1.4,1,2.3v2.6c0,0.3,0.3,0.6,0.7,0.5c3.7-1.5,6.3-5.1,6.3-9.3C22,6.1,16.9,1.4,10.9,2.1z"
+      fill={mono ? "currentColor" : "black"}></path>
     </svg>
   );
 };

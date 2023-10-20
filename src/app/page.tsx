@@ -2,6 +2,7 @@ import { InlineHighlight } from "@/components/inline-highlight";
 import {
   FacebookLogo,
   GetIntentLogo,
+  GithubLogo,
   JitsuLogo,
   LinkedInLogo,
   TelegramLogo,
@@ -13,14 +14,20 @@ import Link from "next/link";
 import Image from "next/image";
 import headshot from "@/assets/headshot.jpg";
 import { TextPage } from "@/components/text-page";
-import { Github, MapPin, Twitter } from "lucide-react";
+import { Mail, MapPin } from "lucide-react";
 import { ReactNode } from "react";
+import clsx from "clsx";
 
-const AvatarLink: React.FC<{ href?: string; children: ReactNode; icon: ReactNode }> = ({ href, children, icon }) => {
+const AvatarLink: React.FC<{ href?: string; className?: string; children: ReactNode; icon: ReactNode }> = ({
+  href,
+  children,
+  icon,
+  ...p
+}) => {
   const content = (
-    <div className="flex items-center flex-nowrap text-sm text-zinc-600 group">
+    <div className={clsx("flex items-center flex-nowrap text-sm text-zinc-600 group", p.className)}>
       <span className="h-4 w-4 group-hover:text-zinc-900 group-hover:scale-105">{icon}</span>
-      <span className="ml-1">{children}</span>
+      <span className="ml-1 whitespace-nowrap">{children}</span>
     </div>
   );
   return href ? <Link href={href}>{content}</Link> : content;
@@ -34,25 +41,34 @@ export default function Home() {
           <Image src={headshot} alt="photo" className="rounded-full h-24 w-24 md:h-32 md:w-32" />
         </Link>
 
-        <section className="flex flex-row  md:flex-col gap-2 mt-6 mb-6">
-          <AvatarLink icon={<MapPin className="h-full w-full" />}>New York</AvatarLink>
-          <AvatarLink
-            icon={
-              <span className="grayscale">
-                {" "}
-                <JitsuLogo />
-              </span>
-            }
-            href="https://jitsu.com"
-          >
-            Jitsu
+        <section className="flex flex-col items-center md:items-start">
+          <AvatarLink className="mt-6" icon={<MapPin className="h-full w-full" />}>
+            New York
           </AvatarLink>
-          <AvatarLink icon={<Twitter className="h-full w-full" />} href="https://twitter.com/vl_klmn">
-            vl_klmn
-          </AvatarLink>
-          <AvatarLink icon={<Github className="h-full w-full" />} href="https://github.com/vklimontovich">
-            vklimontovich
-          </AvatarLink>
+          <div className="flex flex-row md:flex-col flex-wrap justify-center gap-4 md:gap-2 mt-6 mb-6">
+            <AvatarLink icon={<JitsuLogo mono={true} />} href="https://jitsu.com">
+              Jitsu
+            </AvatarLink>
+            <AvatarLink icon={<TwitterLogo mono={true} />} href="https://twitter.com/vl_klmn">
+              vl_klmn
+            </AvatarLink>
+            <AvatarLink icon={<GithubLogo mono={true} />} href="https://github.com/vklimontovich">
+              vklimontovich
+            </AvatarLink>
+            <AvatarLink icon={<TelegramLogo mono={true} />} href="https://t.me/v_klmn">
+              v_klmn
+            </AvatarLink>
+            <AvatarLink
+              icon={
+                <div className="flex bg-current h-full w-full rounded-full justify-center items-center">
+                  <Mail className="text-white" style={{height: '60%', width: '60%'}} />
+                </div>
+              }
+              href="mailto:v@klmn.io"
+            >
+              v@klmn.io
+            </AvatarLink>
+          </div>
         </section>
       </section>
 
