@@ -3,9 +3,7 @@ import React from "react";
 
 import {headshotPng} from "@/lib/headshot"
 
-export const config = {
-  runtime: "edge",
-};
+export const runtime = "edge"
 
 export async function GET(request: Request) {
   return new ImageResponse(
