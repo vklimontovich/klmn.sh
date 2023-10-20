@@ -128,7 +128,7 @@ export default function Home() {
           <InlineHighlight href={"https://getintent.com"} icon={<GetIntentLogo />}>
             GetIntent
           </InlineHighlight>{" "}
-          is (was?) an online advertising platform for buying online ads from{" "}
+          is (was?) an online advertising platform for buying ads from{" "}
           <Link href="https://en.wikipedia.org/wiki/Real-time_bidding">real-time online auctions (aka RTB)</Link>
         </p>
         <p>
