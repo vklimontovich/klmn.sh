@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Quantico } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"] });
+const headerFont = Quantico({ subsets: ["latin"], weight: ["400", "700"], variable: "--font-header" });
+const mainFont = Inter({ subsets: ["latin"], variable: "--font-main" });
+//const monoFont = Inter({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
   title: "Vladimir Klimontovich",
@@ -16,7 +18,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={inter.className}>{children}</body>
+      <body className={`${headerFont.variable} ${mainFont.variable}`}>{children}</body>
     </html>
   );
 }

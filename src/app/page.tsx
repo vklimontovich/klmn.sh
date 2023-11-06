@@ -73,9 +73,9 @@ export default function Home() {
       </section>
 
       <TextPage className="">
-        <h1>Hi, I{"'"}m Vladimir Klimontovich 👋</h1>
+        <h1>Hi, I{"'"}m <span className="whitespace-nowrap">Vladimir Klimontovich 👋</span></h1>
         <p>
-          I{"'"}m a tech entrepreneur and product engineer. I{"'"}m currently a founder{" "}
+          I{"'"}m a tech entrepreneur and product engineer. Currently, I{"'"}m founder and CEO{" "} of
           <InlineHighlight href="https://jitsu.com" icon={<JitsuLogo />}>
             Jitsu
           </InlineHighlight>{" "}

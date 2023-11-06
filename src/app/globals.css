@@ -28,6 +28,11 @@
 
 body {
     @apply bg-zinc-50;
+    font-family: var(--font-main);
+}
+
+h1, h2, h3, h4 {
+    font-family: var(--font-header);
 }
 
 .debug-border {
