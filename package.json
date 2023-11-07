@@ -15,7 +15,8 @@
     "lucide-react": "^0.288.0",
     "next": "13.5.6",
     "react": "^18",
-    "react-dom": "^18"
+    "react-dom": "^18",
+    "next-collect": "1.0.0-alpha.66.20231107214052"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.10",
