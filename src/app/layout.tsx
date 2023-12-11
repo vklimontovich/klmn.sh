@@ -20,13 +20,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className={`${headerFont.variable} ${mainFont.variable}`}>
-      <NextCollectProvider  tags={
-        process.env.NEXT_PUBLIC_GOOGLE_TAG
-          ? [{ type: "google-tag", opts: { debug: true, containerId: process.env.NEXT_PUBLIC_GOOGLE_TAG } }]
-          : []
-      }>
-        {children}
-      </NextCollectProvider>
+        <NextCollectProvider
+          tags={[
+            process.env.NEXT_PUBLIC_GA4 && {
+              type: "ga4",
+              opts: { debug: true, containerId: process.env.NEXT_PUBLIC_GA4 },
+            },
+          ]}
+        >
+          {children}
+        </NextCollectProvider>
       </body>
     </html>
   );
