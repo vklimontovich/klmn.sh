@@ -1,7 +1,46 @@
 import { prisma } from "@/lib/server/prisma";
+import { Resend } from "resend";
+
+import twilio from "twilio";
+
+const resend: Resend | undefined = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : undefined;
+
+const twilioClient: twilio.Twilio | undefined = (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN) : undefined;
+
+async function log(namespace: string, body: any) {
+  console.log(`${new Date().toISOString()} [${namespace}] ${JSON.stringify(body, null, 2)}`);
+  await prisma.log.create({
+    data: {
+      namespace,
+      body,
+    },
+  });
+}
+
+async function sendEmail(param: { subject: string; from: string; to: string; text: string }) {
+  if (resend) {
+    await resend.emails.send({
+      from: param.from,
+      to: param.to,
+      subject: param.subject,
+      text: param.text,
+    });
+  }
+}
+
+async function sendTextMessage(param: { to: string; from: string, text: string }) {
+  if (twilioClient) {
+    await twilioClient.messages.create({
+      body: param.text,
+      from: param.from,
+      to: param.to,
+    });
+  }
+}
+
 
 export async function POST(request: Request) {
-  const headersMap = Object.fromEntries(request.headers.entries());
+  const headersMap = Object.fromEntries([...request.headers.entries()].sort((a, b) => a[0].localeCompare(b[0])));
   const bodyText = await request.text();
   let bodyJson;
   try {
@@ -9,17 +48,92 @@ export async function POST(request: Request) {
   } catch (e) {
     bodyJson = { bodyText };
   }
-  await prisma.log.create({
-    data: {
-      namespace: "twillio-webhook",
-      body: {
-        body: bodyJson,
-        headers: headersMap,
-        method: request.method,
-        url: request.url,
-        query: Object.fromEntries(new URL(request.url).searchParams.entries()),
-      },
-    },
-  })
+  await log("twillio-webhook", {
+    body: bodyJson,
+    headers: headersMap,
+    method: request.method,
+    url: request.url,
+    query: Object.fromEntries(
+      [...new URL(request.url).searchParams.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+    ),
+  });
+
+
+
+  if (!process.env.TWILIO_AUTH_TOKEN) {
+    console.log("Twilio is not configured");
+    return new Response(JSON.stringify({ ok: false, error: "Twilio is not configured" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const params = Object.fromEntries(
+    [...new URLSearchParams(bodyText).entries()].sort((a, b) => a[0].localeCompare(b[0]))
+  );
+
+
+  const twilioSig = request.headers.get("x-twilio-signature");
+
+  if (!twilioSig) {
+    return new Response(JSON.stringify({ ok: false, error: "x-twilio-signature header is missing" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  const fullUrl = request.url;//.replace("http://localhost:6401/", "https://klmn.sh/");
+  if (
+    !twilio.validateRequest(
+      process.env.TWILIO_AUTH_TOKEN,
+      twilioSig!,
+      fullUrl,
+      params
+    )
+  ) {
+    console.log("Twilio signature is invalid");
+    return new Response(JSON.stringify({ ok: false, error: "Twilio signature is invalid" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const { To: to, From: from, Body: body } = params;
+
+  const routes = await prisma.textMessageRoute.findMany({
+    where: { source: to },
+    select: { destination: true, type: true },
+  });
+
+  const routeStatuses: Record<string, string> = {};
+
+  for (const { destination, type } of routes) {
+    if (type === "email") {
+      try {
+        await sendEmail({
+          to: destination,
+          from: `SMS Bot <noreply@mail.klmn.sh>`,
+          subject: `SMS to ${to} from ${from}`,
+          text: body,
+        });
+        routeStatuses[`${type} ${destination}`] = "ok";
+      } catch (e: any) {
+        routeStatuses[`${type} ${destination}`] = `error ${e?.message}`;
+      }
+    } else if (type === "sms") {
+      try {
+        await sendTextMessage({
+          to: destination,
+          from: to,
+          text: `FWD ${from}: ${body}`,
+        });
+        routeStatuses[`${type} ${destination}`] = "ok";
+      } catch (e: any) {
+        routeStatuses[`${type} ${destination}`] = `error ${e?.message}`;
+      }
+    }
+  }
+
+  await log("twillio-webhook", { routeStatuses, params });
+
   return Response.json({ok: true});
 }
