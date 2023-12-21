@@ -10,7 +10,7 @@ const resend: Resend | undefined = process.env.RESEND_API_KEY ? new Resend(proce
 
 const twilioClient: twilio.Twilio | undefined = (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN) : undefined;
 
-async function log(namespace: string, body: any) {
+export async function log(namespace: string, body: any) {
   console.log(`${new Date().toISOString()} [${namespace}] ${JSON.stringify(body, null, 2)}`);
   await prisma.log.create({
     data: {
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
   } catch (e) {
     bodyJson = { bodyText };
   }
-  await log("incoming-http", {
+  await log("incoming-http:twilio", {
     body: bodyJson,
     headers: headersMap,
     method: request.method,
