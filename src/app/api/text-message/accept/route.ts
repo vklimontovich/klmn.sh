@@ -2,6 +2,9 @@ import { prisma } from "@/lib/server/prisma";
 import { Resend } from "resend";
 
 import twilio from "twilio";
+import TwilioSDK from "twilio";
+import { NextRequest } from "next/server";
+import VoiceResponse = TwilioSDK.twiml.VoiceResponse;
 
 const resend: Resend | undefined = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : undefined;
 
@@ -39,7 +42,7 @@ async function sendTextMessage(param: { to: string; from: string, text: string }
 }
 
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   const headersMap = Object.fromEntries([...request.headers.entries()].sort((a, b) => a[0].localeCompare(b[0])));
   const bodyText = await request.text();
   let bodyJson;
@@ -48,7 +51,7 @@ export async function POST(request: Request) {
   } catch (e) {
     bodyJson = { bodyText };
   }
-  await log("twillio-webhook", {
+  await log("incoming-http", {
     body: bodyJson,
     headers: headersMap,
     method: request.method,
@@ -57,8 +60,6 @@ export async function POST(request: Request) {
       [...new URL(request.url).searchParams.entries()].sort((a, b) => a[0].localeCompare(b[0]))
     ),
   });
-
-
 
   if (!process.env.TWILIO_AUTH_TOKEN) {
     console.log("Twilio is not configured");
@@ -72,7 +73,6 @@ export async function POST(request: Request) {
     [...new URLSearchParams(bodyText).entries()].sort((a, b) => a[0].localeCompare(b[0]))
   );
 
-
   const twilioSig = request.headers.get("x-twilio-signature");
 
   if (!twilioSig) {
@@ -81,59 +81,94 @@ export async function POST(request: Request) {
       headers: { "Content-Type": "application/json" },
     });
   }
-  const fullUrl = request.url;//.replace("http://localhost:6401/", "https://klmn.sh/");
-  if (
-    !twilio.validateRequest(
-      process.env.TWILIO_AUTH_TOKEN,
-      twilioSig!,
-      fullUrl,
-      params
-    )
-  ) {
-    console.log("Twilio signature is invalid");
+  const fullUrl = request.url; //.replace("http://localhost:6401/", "https://klmn.sh/");
+  if (!twilio.validateRequest(process.env.TWILIO_AUTH_TOKEN, twilioSig!, fullUrl, params)) {
     return new Response(JSON.stringify({ ok: false, error: "Twilio signature is invalid" }), {
       status: 401,
       headers: { "Content-Type": "application/json" },
     });
   }
 
-  const { To: to, From: from, Body: body } = params;
-
+  const type = request.nextUrl.searchParams.get("type");
+  const to = params.To;
   const routes = await prisma.textMessageRoute.findMany({
     where: { source: to },
     select: { destination: true, type: true },
   });
+  if (type === "sms") {
+    const { From: from, Body: body } = params;
 
-  const routeStatuses: Record<string, string> = {};
+    const routeStatuses: Record<string, string> = {};
 
-  for (const { destination, type } of routes) {
-    if (type === "email") {
-      try {
-        await sendEmail({
-          to: destination,
-          from: `SMS Bot <noreply@mail.klmn.sh>`,
-          subject: `SMS to ${to} from ${from}`,
-          text: body,
-        });
-        routeStatuses[`${type} ${destination}`] = "ok";
-      } catch (e: any) {
-        routeStatuses[`${type} ${destination}`] = `error ${e?.message}`;
+    for (const { destination, type } of routes) {
+      if (type === "email") {
+        try {
+          await sendEmail({
+            to: destination,
+            from: `SMS Bot <noreply@mail.klmn.sh>`,
+            subject: `SMS to ${to} from ${from}`,
+            text: body,
+          });
+          routeStatuses[`${type} ${destination}`] = "ok";
+        } catch (e: any) {
+          routeStatuses[`${type} ${destination}`] = `error ${e?.message}`;
+        }
+      } else if (type === "sms") {
+        try {
+          await sendTextMessage({
+            to: destination,
+            from: to,
+            text: `FWD ${from}: ${body}`,
+          });
+          routeStatuses[`${type} ${destination}`] = "ok";
+        } catch (e: any) {
+          routeStatuses[`${type} ${destination}`] = `error ${e?.message}`;
+        }
       }
-    } else if (type === "sms") {
-      try {
-        await sendTextMessage({
-          to: destination,
-          from: to,
-          text: `FWD ${from}: ${body}`,
+    }
+
+    await log("twillio-sms-webhook", { routeStatuses, params });
+
+    return Response.json({ ok: true });
+  } else if (type === "call") {
+    const { From: from } = params;
+    const routeStatuses: Record<string, string> = {};
+    for (const { destination, type } of routes) {
+      if (type === "email") {
+        try {
+          await sendEmail({
+            to: destination,
+            from: `Call Handler Bot <noreply@mail.klmn.sh>`,
+            subject: `Call to ${to} from ${from}`,
+            text: `${from} tried to call ${to}. Full call data:\n ${JSON.stringify(params, null, 2)}`,
+          });
+          routeStatuses[`${type} ${destination}`] = "ok";
+        } catch (e: any) {
+          routeStatuses[`${type} ${destination}`] = `error ${e?.message}`;
+        }
+      } else if (type === "sms") {
+        try {
+          await sendTextMessage({
+            to: destination,
+            from: to,
+            text: `Missed call from ${from}. Full details in email`,
+          });
+          routeStatuses[`${type} ${destination}`] = "ok";
+        } catch (e: any) {
+          routeStatuses[`${type} ${destination}`] = `error ${e?.message}`;
+        }
+
+        const twiml = new VoiceResponse();
+        twiml.say(
+          "Hello, you've reached Vladimir Klimontovich. I'm currently unavailable to take your call. Text me if you need anything, and I'll get back to you as soon as possible. Thank you!"
+        );
+        twiml.hangup();
+        return new Response(twiml.toString(), {
+          headers: {
+            "Content-Type": "text/xml",
+          },
         });
-        routeStatuses[`${type} ${destination}`] = "ok";
-      } catch (e: any) {
-        routeStatuses[`${type} ${destination}`] = `error ${e?.message}`;
       }
     }
   }
-
-  await log("twillio-webhook", { routeStatuses, params });
-
-  return Response.json({ok: true});
 }
