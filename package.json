@@ -5,7 +5,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "next dev -p 6401",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start -p 6401",
     "lint": "next lint"
   },
