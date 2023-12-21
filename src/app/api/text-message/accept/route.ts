@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/server/prisma";
 import { Resend } from "resend";
+import TelegramBot from "node-telegram-bot-api";
 
 import twilio from "twilio";
 import TwilioSDK from "twilio";
@@ -10,6 +11,8 @@ const resend: Resend | undefined = process.env.RESEND_API_KEY ? new Resend(proce
 
 const twilioClient: twilio.Twilio | undefined = (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN) : undefined;
 
+const telegramClient = process.env.TELEGRAM_TOKEN ? new TelegramBot(process.env.TELEGRAM_TOKEN) : undefined;
+
 export async function log(namespace: string, body: any) {
   console.log(`${new Date().toISOString()} [${namespace}] ${JSON.stringify(body, null, 2)}`);
   await prisma.log.create({
@@ -18,6 +21,26 @@ export async function log(namespace: string, body: any) {
       body,
     },
   });
+}
+
+function isNumeric(to: string) {
+  return /^\d+$/.test(to);
+}
+
+async function sendTelegramMessage(param: { to: string; text: string }) {
+  if (telegramClient) {
+    let chatId;
+    if (isNumeric(param.to)) {
+      chatId = param.to;
+    } else {
+      const contact = await prisma.telegramContacts.findFirst({ where: { userName: param.to } });
+      if (!contact) {
+        throw new Error(`Telegram contact ${param.to} not found`);
+      }
+      chatId = contact.userId;
+    }
+    await telegramClient.sendMessage(chatId, param.text, { parse_mode: "HTML" });
+  }
 }
 
 async function sendEmail(param: { subject: string; from: string; to: string; text: string }) {
@@ -124,6 +147,16 @@ export async function POST(request: NextRequest) {
         } catch (e: any) {
           routeStatuses[`${type} ${destination}`] = `error ${e?.message}`;
         }
+      } else if (type === "telegram") {
+        try {
+          await sendTelegramMessage({
+            to: destination,
+            text: `New SMS from ${from}: ${body}`,
+          });
+          routeStatuses[`${type} ${destination}`] = "ok";
+        } catch (e: any) {
+          routeStatuses[`${type} ${destination}`] = `error ${e?.message}`;
+        }
       }
     }
 
@@ -157,20 +190,30 @@ export async function POST(request: NextRequest) {
         } catch (e: any) {
           routeStatuses[`${type} ${destination}`] = `error ${e?.message}`;
         }
-
-        const twiml = new VoiceResponse();
-
-        twiml.say(
-          {voice: 'Polly.Joey', language: 'en-US'},
-          "Hello, you've reached Vladimir Klimontovich. I'm currently unavailable to take your call. Text me if you need anything, and I'll get back to you as soon as possible. Thank you!"
-        );
-        twiml.hangup();
-        return new Response(twiml.toString(), {
-          headers: {
-            "Content-Type": "text/xml",
-          },
-        });
+      } else if (type === "telegram") {
+        try {
+          await sendTelegramMessage({
+            to: destination,
+            text: `Got a call from ${from}. Full details:\n<pre>${JSON.stringify(params, null, 2)}</pre>`,
+          });
+          routeStatuses[`${type} ${destination}`] = "ok";
+        } catch (e: any) {
+          routeStatuses[`${type} ${destination}`] = `error ${e?.message}`;
+        }
       }
+
+      const twiml = new VoiceResponse();
+
+      twiml.say(
+        { voice: "Polly.Joey", language: "en-US" },
+        "Hello, you've reached Vladimir Klimontovich. I'm currently unavailable to take your call. Text me if you need anything, and I'll get back to you as soon as possible. Thank you!"
+      );
+      twiml.hangup();
+      return new Response(twiml.toString(), {
+        headers: {
+          "Content-Type": "text/xml",
+        },
+      });
     }
   }
 }

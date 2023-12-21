@@ -24,3 +24,30 @@ model TextMessageRoute {
   type      String
   destination String
 }
+
+model TelegramContacts {
+  id        String      @default(uuid()) @id
+  createdAt DateTime    @default(now())
+  chatId	String
+  userId    String
+  userName  String
+}
+
+
+model RssExport {
+  id           String      @default(uuid()) @id
+  createdAt    DateTime    @default(now())
+  rssUrl	   String
+  channelName  String
+  destination String
+  RssItem      RssItem[]
+}
+
+model RssItem {
+  id               String      @default(uuid()) @id
+  createdAt    	   DateTime    @default(now())
+  channelMessageId String
+
+  rssExportId  String
+  rssExport    RssExport   @relation(fields: [rssExportId], references: [id])
+}

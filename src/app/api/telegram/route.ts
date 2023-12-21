@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { log } from "@/app/api/text-message/accept/route";
+import { prisma } from "@/lib/server/prisma";
 
 export async function POST(request: NextRequest) {
   const headersMap = Object.fromEntries([...request.headers.entries()].sort((a, b) => a[0].localeCompare(b[0])));
@@ -19,5 +20,19 @@ export async function POST(request: NextRequest) {
       [...new URL(request.url).searchParams.entries()].sort((a, b) => a[0].localeCompare(b[0]))
     ),
   });
+
+  const existingEntry = await prisma.telegramContacts.findFirst({where: {chatId: bodyJson.message?.chat.id}});
+
+  if (!existingEntry) {
+    await prisma.telegramContacts.create({
+      data: {
+        chatId: bodyJson.message?.chat.id,
+        userId: bodyJson.message?.from?.id,
+        userName: bodyJson.message?.from?.username,
+      }
+    })
+  }
+
+
   return Response.json({ message: "ok" });
 }
