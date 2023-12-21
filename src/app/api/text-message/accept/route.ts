@@ -1,17 +1,16 @@
 import { prisma } from "@/lib/server/prisma";
 import { Resend } from "resend";
-import TelegramBot from "node-telegram-bot-api";
 
 import twilio from "twilio";
 import TwilioSDK from "twilio";
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { telegramClient } from "@/lib/server/telegram";
 import VoiceResponse = TwilioSDK.twiml.VoiceResponse;
 
 const resend: Resend | undefined = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : undefined;
 
 const twilioClient: twilio.Twilio | undefined = (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN) : undefined;
 
-const telegramClient = process.env.TELEGRAM_TOKEN ? new TelegramBot(process.env.TELEGRAM_TOKEN) : undefined;
 
 export async function log(namespace: string, body: any) {
   console.log(`${new Date().toISOString()} [${namespace}] ${JSON.stringify(body, null, 2)}`);
@@ -162,7 +161,7 @@ export async function POST(request: NextRequest) {
 
     await log("twillio-sms-webhook", { routeStatuses, params });
 
-    return Response.json({ ok: true });
+    return Response.json({ ok: true, routeStatuses });
   } else if (type === "call") {
     const { From: from } = params;
     const routeStatuses: Record<string, string> = {};
@@ -202,18 +201,20 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const twiml = new VoiceResponse();
-
-      twiml.say(
-        { voice: "Polly.Joey", language: "en-US" },
-        "Hello, you've reached Vladimir Klimontovich. I'm currently unavailable to take your call. Text me if you need anything, and I'll get back to you as soon as possible. Thank you!"
-      );
-      twiml.hangup();
-      return new Response(twiml.toString(), {
-        headers: {
-          "Content-Type": "text/xml",
-        },
-      });
     }
+    const twiml = new VoiceResponse();
+
+    twiml.say(
+      { voice: "Polly.Joey", language: "en-US" },
+      "Hello, you've reached Vladimir Klimontovich. I'm currently unavailable to take your call. Text me if you need anything, and I'll get back to you as soon as possible. Thank you!"
+    );
+    twiml.hangup();
+    return new Response(twiml.toString(), {
+      headers: {
+        "Content-Type": "text/xml",
+      },
+    });
+  } else {
+    return new NextResponse("Invalid type", { status: 400 })
   }
 }
