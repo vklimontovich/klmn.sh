@@ -159,7 +159,9 @@ export async function POST(request: NextRequest) {
         }
 
         const twiml = new VoiceResponse();
+
         twiml.say(
+          {voice: 'Polly.Maxim', language: 'en-US'},
           "Hello, you've reached Vladimir Klimontovich. I'm currently unavailable to take your call. Text me if you need anything, and I'll get back to you as soon as possible. Thank you!"
         );
         twiml.hangup();
