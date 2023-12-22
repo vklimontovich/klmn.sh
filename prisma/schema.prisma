@@ -30,7 +30,7 @@ model TelegramContacts {
   createdAt DateTime    @default(now())
   chatId	String
   userId    String
-  userName  String
+  userName  String?
 }
 
 
