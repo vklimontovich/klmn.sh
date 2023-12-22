@@ -2,6 +2,9 @@ on:
   schedule:
     # Runs every 5 minutes
     - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+name: "Syncrhonize all RSS feeds with telegram updates"
 
 jobs:
   fetch-rss:
