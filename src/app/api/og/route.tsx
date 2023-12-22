@@ -1,9 +1,9 @@
 import { ImageResponse } from "@vercel/og";
 import React from "react";
 
-import {headshotPng} from "@/lib/headshot"
+import { headshotPng } from "@/lib/headshot";
 
-export const runtime = "edge"
+export const runtime = "edge";
 
 export async function GET(request: Request) {
   return new ImageResponse(

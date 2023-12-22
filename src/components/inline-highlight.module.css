@@ -1,38 +1,37 @@
 .highlight {
-    @apply border border-zinc-200 bg-zinc-100 text-zinc-900;
-    line-height: normal;
-    display: inline-flex;
-    flex-wrap: nowrap;
-    align-items: center;
-    white-space: nowrap;
-    border-radius: 3px;
-    font-size: 90%;
-    padding: 0.02em 0.25em;
+  @apply border border-zinc-200 bg-zinc-100 text-zinc-900;
+  line-height: normal;
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  white-space: nowrap;
+  border-radius: 3px;
+  font-size: 90%;
+  padding: 0.02em 0.25em;
 }
 
 @keyframes rotateAndJump {
-    0% {
-        transform: scale(100%);
-    }
-    10% {
-        transform: scale(120%) rotate(0deg);
-    }
-    90% {
-        transform: scale(120%) rotate(360deg);
-    }
-    100% {
-        transform: scale(120%) rotate(360deg);
-    }
+  0% {
+    transform: scale(100%);
+  }
+  10% {
+    transform: scale(120%) rotate(0deg);
+  }
+  90% {
+    transform: scale(120%) rotate(360deg);
+  }
+  100% {
+    transform: scale(120%) rotate(360deg);
+  }
 }
 
 .iconAnimation {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    animation: 0.6s ease-in-out forwards
-
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  animation: 0.6s ease-in-out forwards;
 }
 
 .highlight:hover .iconAnimation {
-    animation: rotateAndJump 0.6s ease-in-out forwards;
+  animation: rotateAndJump 0.6s ease-in-out forwards;
 }

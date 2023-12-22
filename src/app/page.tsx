@@ -61,7 +61,7 @@ export default function Home() {
             <AvatarLink
               icon={
                 <div className="flex bg-current h-full w-full rounded-full justify-center items-center">
-                  <Mail className="text-white" style={{height: '60%', width: '60%'}} />
+                  <Mail className="text-white" style={{ height: "60%", width: "60%" }} />
                 </div>
               }
               href="mailto:v@klmn.io"
@@ -73,9 +73,11 @@ export default function Home() {
       </section>
 
       <TextPage className="">
-        <h1>Hi, I{"'"}m <span className="whitespace-nowrap">Vladimir Klimontovich 👋</span></h1>
+        <h1>
+          Hi, I{"'"}m <span className="whitespace-nowrap">Vladimir Klimontovich 👋</span>
+        </h1>
         <p>
-          I{"'"}m a tech entrepreneur and product engineer. Currently, I{"'"}m founder and CEO{" "} of
+          I{"'"}m a tech entrepreneur and product engineer. Currently, I{"'"}m founder and CEO of
           <InlineHighlight href="https://jitsu.com" icon={<JitsuLogo />}>
             Jitsu
           </InlineHighlight>{" "}

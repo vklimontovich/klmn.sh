@@ -1,3 +1,3 @@
-import { nextCollectMiddleware } from "next-collect/server"
+import { nextCollectMiddleware } from "next-collect/server";
 
-export default nextCollectMiddleware()
+export default nextCollectMiddleware();

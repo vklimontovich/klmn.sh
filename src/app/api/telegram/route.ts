@@ -22,7 +22,10 @@ export async function POST(request: NextRequest) {
     ),
   });
 
-  if (process.env.TELEGRAM_WEBHOOK_SECRET && process.env.TELEGRAM_WEBHOOK_SECRET !== request.nextUrl.searchParams.get("secret")) {
+  if (
+    process.env.TELEGRAM_WEBHOOK_SECRET &&
+    process.env.TELEGRAM_WEBHOOK_SECRET !== request.nextUrl.searchParams.get("secret")
+  ) {
     return new Response("Unauthorized", { status: 401 });
   }
 
@@ -37,20 +40,25 @@ export async function POST(request: NextRequest) {
         chatId: chatId,
         userId: userId,
         userName: bodyJson.message?.from?.username,
-      }
-    })
+      },
+    });
 
     if (telegramClient) {
-      console.log("Sending welcome message to", chatId)
-      await telegramClient.sendMessage(chatId, "Welcome! This bot will be sending you forwarded SMS messages", { parse_mode: "HTML" });
+      console.log("Sending welcome message to", chatId);
+      await telegramClient.sendMessage(chatId, "Welcome! This bot will be sending you forwarded SMS messages", {
+        parse_mode: "HTML",
+      });
     }
   } else {
     if (telegramClient) {
-      console.log("Sending message to", chatId)
-      await telegramClient.sendMessage(chatId, "I'm not a real bot, I can't understand your messages. I'm here just to forward SMS messages to you", { parse_mode: "HTML" });
+      console.log("Sending message to", chatId);
+      await telegramClient.sendMessage(
+        chatId,
+        "I'm not a real bot, I can't understand your messages. I'm here just to forward SMS messages to you",
+        { parse_mode: "HTML" }
+      );
     }
   }
-
 
   return Response.json({ message: "ok" });
 }

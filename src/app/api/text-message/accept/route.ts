@@ -9,8 +9,10 @@ import VoiceResponse = TwilioSDK.twiml.VoiceResponse;
 
 const resend: Resend | undefined = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : undefined;
 
-const twilioClient: twilio.Twilio | undefined = (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN) : undefined;
-
+const twilioClient: twilio.Twilio | undefined =
+  process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN
+    ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
+    : undefined;
 
 export async function log(namespace: string, body: any) {
   console.log(`${new Date().toISOString()} [${namespace}] ${JSON.stringify(body, null, 2)}`);
@@ -53,7 +55,7 @@ async function sendEmail(param: { subject: string; from: string; to: string; tex
   }
 }
 
-async function sendTextMessage(param: { to: string; from: string, text: string }) {
+async function sendTextMessage(param: { to: string; from: string; text: string }) {
   if (twilioClient) {
     await twilioClient.messages.create({
       body: param.text,
@@ -62,7 +64,6 @@ async function sendTextMessage(param: { to: string; from: string, text: string }
     });
   }
 }
-
 
 export async function POST(request: NextRequest) {
   const headersMap = Object.fromEntries([...request.headers.entries()].sort((a, b) => a[0].localeCompare(b[0])));
@@ -200,7 +201,6 @@ export async function POST(request: NextRequest) {
           routeStatuses[`${type} ${destination}`] = `error ${e?.message}`;
         }
       }
-
     }
     const twiml = new VoiceResponse();
 
@@ -215,6 +215,6 @@ export async function POST(request: NextRequest) {
       },
     });
   } else {
-    return new NextResponse("Invalid type", { status: 400 })
+    return new NextResponse("Invalid type", { status: 400 });
   }
 }

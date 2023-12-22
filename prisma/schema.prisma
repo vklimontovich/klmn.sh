@@ -37,9 +37,10 @@ model TelegramContacts {
 model RssExport {
   id           String      @default(uuid()) @id
   createdAt    DateTime    @default(now())
-  rssUrl	   String
-  channelName  String
-  destination String
+  rssUrl	           String
+  telegramChannelName  String
+  lastSignature 	   String?
+  lastUpdateAt DateTime?
   RssItem      RssItem[]
 }
 
@@ -47,7 +48,17 @@ model RssItem {
   id               String      @default(uuid()) @id
   createdAt    	   DateTime    @default(now())
   channelMessageId String
-
+  guid			   String
+  signature        String?
   rssExportId  String
   rssExport    RssExport   @relation(fields: [rssExportId], references: [id])
+}
+
+model TaskQueue {
+  id        String      @default(uuid()) @id
+  createdAt DateTime    @default(now())
+  completedAt DateTime?
+  error String?
+  key String?
+  task Json
 }
