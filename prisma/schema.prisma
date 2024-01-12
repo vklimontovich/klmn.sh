@@ -28,9 +28,18 @@ model TextMessageRoute {
 model TelegramContacts {
   id        String      @default(uuid()) @id
   createdAt DateTime    @default(now())
+  botHandle    String?
   chatId	String
   userId    String
   userName  String?
+}
+
+model TelegramBots {
+   id 	  String      @default(uuid()) @id
+   createdAt  DateTime    @default(now())
+   botHandle    String?
+   webhookSecret String
+   botToken   String
 }
 
 

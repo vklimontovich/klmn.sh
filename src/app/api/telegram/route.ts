@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
 import { log } from "@/app/api/text-message/accept/route";
 import { prisma } from "@/lib/server/prisma";
-import { telegramClient } from "@/lib/server/telegram";
+import TelegramBot, { Message } from "node-telegram-bot-api";
+import { allBots } from "@/lib/server/bots";
 
 export async function POST(request: NextRequest) {
   const headersMap = Object.fromEntries([...request.headers.entries()].sort((a, b) => a[0].localeCompare(b[0])));
@@ -21,43 +22,47 @@ export async function POST(request: NextRequest) {
       [...new URL(request.url).searchParams.entries()].sort((a, b) => a[0].localeCompare(b[0]))
     ),
   });
-
-  if (
-    process.env.TELEGRAM_WEBHOOK_SECRET &&
-    process.env.TELEGRAM_WEBHOOK_SECRET !== request.nextUrl.searchParams.get("secret")
-  ) {
-    return new Response("Unauthorized", { status: 401 });
+  let botHandle = request.nextUrl.searchParams.get("bot") || "phone1_929_264_5065_bot";
+  if (botHandle.startsWith("@")) {
+    botHandle = botHandle.substring(1);
   }
 
-  const chatId = bodyJson.message?.chat.id + "";
+  const bot = await prisma.telegramBots.findFirst({ where: { botHandle } });
+
+  if (!bot) {
+    return new Response(`Bot ${botHandle} not found`, { status: 404 });
+  }
+
+  if (bot.webhookSecret !== request.nextUrl.searchParams.get("secret")) {
+    return new Response(`Unauthorized. Invalid secret ${request.nextUrl.searchParams.get("secret")}`, { status: 401 });
+  }
+
+  const message = bodyJson.message as Message;
+
+  const chatId = message.chat.id + "";
   const existingEntry = await prisma.telegramContacts.findFirst({ where: { chatId } });
 
   if (!existingEntry) {
-    const userId = bodyJson.message?.from?.id + "";
+    const userId = message.from?.id + "";
 
     await prisma.telegramContacts.create({
       data: {
         chatId: chatId,
         userId: userId,
-        userName: bodyJson.message?.from?.username,
+        userName: message.from?.username,
+        botHandle,
       },
     });
-
-    if (telegramClient) {
-      console.log("Sending welcome message to", chatId);
-      await telegramClient.sendMessage(chatId, "Welcome! This bot will be sending you forwarded SMS messages", {
-        parse_mode: "HTML",
-      });
-    }
-  } else {
-    if (telegramClient) {
-      console.log("Sending message to", chatId);
-      await telegramClient.sendMessage(
-        chatId,
-        "I'm not a real bot, I can't understand your messages. I'm here just to forward SMS messages to you",
-        { parse_mode: "HTML" }
-      );
-    }
+  }
+  try {
+    await allBots[botHandle].handleUpdate({
+      msg: message,
+      client: new TelegramBot(bot.botToken),
+      isNewUser: !existingEntry,
+    });
+  } catch (e: any) {
+    console.log(`Error handling update for ${bot.botHandle}`, e);
+    return new Response(e?.message || "Unknown error", { status: 500 });
   }
 
   return Response.json({ message: "ok" });
