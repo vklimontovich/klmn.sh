@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     const botInfo = (await prisma.telegramBots.findFirst({ where: { botHandle: "MailForwardingBot" } }))!;
 
     let msg = {
-      message_id: 11,
+      message_id: 85,
       from: {
         id: 85367,
         is_bot: false,
@@ -38,20 +38,37 @@ export async function GET(request: NextRequest) {
         username: "v_klmn",
         type: "private",
       },
-      date: 1705095103,
-      text: "/help",
-      entities: [
-        {
-          offset: 0,
-          length: 5,
-          type: "bot_command",
+      date: 1705098140,
+      document: {
+        file_name: "Green_Card_letter-tony_costanoavc.com.pdf",
+        mime_type: "application/pdf",
+        thumbnail: {
+          file_id: "AAMCAgADGQEAA1VlobucrUnzm7_enJgmnFQSPahTEQAC-DwAArtNEEk1u_QRfNdAgAEAB20AAzQE",
+          file_unique_id: "AQAD-DwAArtNEEly",
+          file_size: 20681,
+          width: 247,
+          height: 320,
         },
-      ],
+        thumb: {
+          file_id: "AAMCAgADGQEAA1VlobucrUnzm7_enJgmnFQSPahTEQAC-DwAArtNEEk1u_QRfNdAgAEAB20AAzQE",
+          file_unique_id: "AQAD-DwAArtNEEly",
+          file_size: 20681,
+          width: 247,
+          height: 320,
+        },
+        file_id: "BQACAgIAAxkBAANVZaG7nK1J85u_3pyYJpxUEj2oUxEAAvg8AAK7TRBJNbv0EXzXQIA0BA",
+        file_unique_id: "AgAD-DwAArtNEEk",
+        file_size: 436940,
+      },
+      caption: "BlaBlaBla",
     };
     await handleEmailForwardingMessage({
       msg: msg as any,
       client: new TelegramBot(botInfo.botToken),
       isNewUser: false,
+      botToken: botInfo.botToken,
+      appHost: "http://localhost:6401",
+      botHandle: "MailForwardingBot",
     });
     return Response.json({ ok: true });
   } catch (e: any) {

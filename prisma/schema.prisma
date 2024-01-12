@@ -79,5 +79,15 @@ model EmailForwarding {
   telegramUserId String
   forwardTo String
   confirmed DateTime?
+  secret String?
   confirmationCode String?
+}
+
+model Attachment {
+  id		String      @default(uuid()) @id
+  updatedAt DateTime    @updatedAt
+  filename String?
+  botHandle String
+  fileId String
+  secret String
 }

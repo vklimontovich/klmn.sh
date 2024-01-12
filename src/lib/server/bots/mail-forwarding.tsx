@@ -1,5 +1,5 @@
 import { MessageHandler } from "@/lib/server/bots/index";
-import { Chat, Message, User } from "node-telegram-bot-api";
+import TelegramBot, { Chat, Message, User } from "node-telegram-bot-api";
 import { prisma } from "@/lib/server/prisma";
 import { resend } from "@/lib/server/email";
 import assert from "node:assert";
@@ -86,7 +86,45 @@ function getName(user?: User | Chat): string | undefined {
     : user.first_name || user.last_name || user.username || user.id + "" || undefined;
 }
 
-export const handleEmailForwardingMessage: MessageHandler = async ({ msg, client, isNewUser }) => {
+type Attach = {
+  filename?: string;
+  secret: string;
+};
+
+async function toAttachment(
+  fileId: string,
+  client: TelegramBot,
+  botHandle: string,
+  opts: { name?: string; size?: number }
+): Promise<Attach | undefined> {
+  const file = await client.getFile(fileId);
+  if (!file.file_size) {
+    return undefined;
+  }
+  const secret =
+    Math.random().toString(36).substring(2, 15) +
+    Math.random().toString(36).substring(2, 15) +
+    Math.random().toString(36).substring(2, 15);
+  let filename = opts.name;
+  await prisma.attachment.create({
+    data: {
+      fileId: fileId,
+      filename,
+      botHandle,
+      secret,
+    },
+  });
+  return { filename, secret };
+}
+
+export const handleEmailForwardingMessage: MessageHandler = async ({
+  msg,
+  client,
+  isNewUser,
+  botToken,
+  appHost,
+  botHandle,
+}) => {
   const userName = getName(msg.from) || "there";
   const forwardedFrom = getName(msg.forward_from) || getName(msg.forward_from_chat) || getName(msg.from) || "unknown";
   const command = getCommand(msg);
@@ -190,6 +228,37 @@ export const handleEmailForwardingMessage: MessageHandler = async ({ msg, client
       }
 
       const fromUserHandle = msg?.forward_from?.username || msg?.forward_from_chat?.username || msg?.from?.username;
+      const attachments: (Attach | undefined)[] = [];
+      if (msg?.document) {
+        attachments.push(
+          await toAttachment(msg.document.file_id, client, botHandle, {
+            name: msg.document.file_name,
+            size: msg.document.file_size,
+          })
+        );
+      }
+      if (msg?.video_note) {
+        attachments.push(
+          await toAttachment(msg.video_note.file_id, client, botHandle, {
+            name: "Video Note.mp4",
+            size: msg.video_note.file_size,
+          })
+        );
+      }
+      if (msg?.video) {
+        attachments.push(
+          await toAttachment(msg.video.file_id, client, botHandle, {
+            name: "Video Note.mp4",
+            size: msg.video.file_size,
+          })
+        );
+      }
+      if (msg?.photo) {
+        const maxPhoto = msg.photo.reduce((a, b) => ((a.file_size || 0) > (b.file_size || 0) ? a : b));
+        attachments.push(
+          await toAttachment(maxPhoto.file_id, client, botHandle, { name: "Photo.jpg", size: maxPhoto.file_size })
+        );
+      }
 
       const email = forwarding.forwardTo;
       await resend!.emails.send({
@@ -199,6 +268,15 @@ export const handleEmailForwardingMessage: MessageHandler = async ({ msg, client
         html:
           telegramJsonToHtml(msg) +
           `<br /><br />---<br /><small>This message was forwared to you from <a href="https://t.me/${fromUserHandle}">@${fromUserHandle}</a> by <a href="https://t.me/MailForwardingBot">@MailForwardingBot</a></small>`,
+        attachments: attachments
+          .filter(a => !!a)
+          .map(a => ({
+            filename: a!.filename,
+            path: `${appHost}/api/telegram/download?secret=${a!.secret}`,
+          })),
+        headers: {
+          "X-Entity-Ref-ID": Math.random().toString(36).substring(2, 15),
+        },
       });
       await client.sendMessage(msg.chat.id, `Your message was forwarded to <b>${email}</b>`, { parse_mode: "HTML" });
     }
@@ -206,7 +284,11 @@ export const handleEmailForwardingMessage: MessageHandler = async ({ msg, client
     console.error(`Error processing request`, e);
     await client.sendMessage(
       msg.chat.id,
-      `Something went wrong. Please try again later or contact @v_klmn if the problem persists.\n\nMessage content: <pre>${JSON.stringify(msg, null, 2)}</pre>`,
+      `Something went wrong. Please try again later or contact @v_klmn if the problem persists.\n\nMessage content:<pre>${JSON.stringify(
+        msg,
+        null,
+        2
+      )}</pre>.\n\nError:\n\n<pre>${e?.message || "Unknown error"}</pre>`,
       { parse_mode: "HTML" }
     );
     return;

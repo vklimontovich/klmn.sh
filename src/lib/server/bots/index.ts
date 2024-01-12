@@ -2,7 +2,14 @@ import TelegramBot, { Message } from "node-telegram-bot-api";
 import { telegramClient } from "@/lib/server/telegram";
 import { handleEmailForwardingMessage } from "@/lib/server/bots/mail-forwarding";
 
-export type MessageHandler = (opts: { msg: Message; client: TelegramBot; isNewUser: boolean }) => Promise<void>;
+export type MessageHandler = (opts: {
+  msg: Message;
+  client: TelegramBot;
+  isNewUser: boolean;
+  botToken: string;
+  appHost: string;
+  botHandle: string;
+}) => Promise<void>;
 export type TelegramBotHandler = {
   handleMessage: MessageHandler;
 };

@@ -4,6 +4,21 @@ import { prisma } from "@/lib/server/prisma";
 import TelegramBot, { Message } from "node-telegram-bot-api";
 import { allBots } from "@/lib/server/bots";
 
+function getHost(request: NextRequest) {
+  let host: string;
+  if (request.headers.get("x-forwarded-host")) {
+    host = request.headers.get("x-forwarded-host")!;
+  } else if (request.headers.get("host")) {
+    host = request.headers.get("host")!;
+  } else {
+    host = request.nextUrl.host;
+  }
+  if (!host.startsWith("http")) {
+    host = `https://${host}`;
+  }
+  return host;
+}
+
 export async function POST(request: NextRequest) {
   const headersMap = Object.fromEntries([...request.headers.entries()].sort((a, b) => a[0].localeCompare(b[0])));
   const bodyText = await request.text();
@@ -59,6 +74,9 @@ export async function POST(request: NextRequest) {
       msg: message,
       client: new TelegramBot(bot.botToken),
       isNewUser: !existingEntry,
+      botToken: bot.botToken,
+      appHost: getHost(request),
+      botHandle,
     });
   } catch (e: any) {
     console.log(`Error handling update for ${bot.botHandle}`, e);
