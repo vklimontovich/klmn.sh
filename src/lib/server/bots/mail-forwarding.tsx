@@ -13,7 +13,7 @@ export const helpMessage = `/help - display help
 For any questions, please contact @v_klmn`;
 
 export const welcomeMessage = ({ userName }: { userName: string }) => `
-Hi <b>${userName}</b>! 
+👋Hi <b>${userName}</b>! 
 
 I'm the email bot. I can forward messages that you foward me to your email.
 
@@ -89,23 +89,15 @@ function getName(user?: User | Chat): string | undefined {
 export const handleEmailForwardingMessage: MessageHandler = async ({ msg, client, isNewUser }) => {
   const userName = getName(msg.from) || "there";
   const forwardedFrom = getName(msg.forward_from) || getName(msg.forward_from_chat) || getName(msg.from) || "unknown";
+  const command = getCommand(msg);
   try {
-    if (isNewUser) {
+    if (isNewUser || command === "start") {
       const welcomeMessageText = welcomeMessage({
         userName: userName,
       }).trim();
       console.log(welcomeMessageText);
-      try {
-        await client.sendMessage(
-          msg.chat.id,
-          welcomeMessageText,
-          { parse_mode: "HTML" }
-        );
-      } catch (e) {
-        //
-      }
+      await client.sendMessage(msg.chat.id, welcomeMessageText, { parse_mode: "HTML" });
     }
-    const command = getCommand(msg);
     if (command?.trim() === "help") {
       await client.sendMessage(msg.chat.id, `<b>Bot commands:</b>\n\n${helpMessage}`, { parse_mode: "HTML" });
       return;
