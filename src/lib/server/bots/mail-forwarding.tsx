@@ -186,6 +186,7 @@ export const handleEmailForwardingMessage: MessageHandler = async ({ msg, client
           "You haven't confirmed email forwarding yet. Please check your email for confirmation link. If you didn't receive a confirmation email or need a new confirmation code, please run `/setup your@email.com` command once again.",
           { parse_mode: "HTML" }
         );
+        return;
       }
 
       const fromUserHandle = msg?.forward_from?.username || msg?.forward_from_chat?.username || msg?.from?.username;
