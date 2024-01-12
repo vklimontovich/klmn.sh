@@ -6,8 +6,7 @@ import TwilioSDK from "twilio";
 import { NextRequest, NextResponse } from "next/server";
 import { telegramClient } from "@/lib/server/telegram";
 import VoiceResponse = TwilioSDK.twiml.VoiceResponse;
-
-const resend: Resend | undefined = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : undefined;
+import { resend } from "@/lib/server/email";
 
 const twilioClient: twilio.Twilio | undefined =
   process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN

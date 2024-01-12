@@ -1,14 +1,15 @@
 import TelegramBot, { Message } from "node-telegram-bot-api";
 import { telegramClient } from "@/lib/server/telegram";
-import { handleEmailForwardingRequest } from "@/lib/server/bots/email";
+import { handleEmailForwardingMessage } from "@/lib/server/bots/mail-forwarding";
 
+export type MessageHandler = (opts: { msg: Message; client: TelegramBot; isNewUser: boolean }) => Promise<void>;
 export type TelegramBotHandler = {
-  handleUpdate: (opts: { msg: Message; client: TelegramBot; isNewUser: boolean }) => Promise<void>
+  handleMessage: MessageHandler;
 };
 
 export const allBots: Record<string, TelegramBotHandler> = {
   phone1_929_264_5065_bot: {
-    handleUpdate: async ({ msg, client, isNewUser }) => {
+    handleMessage: async ({ msg, client, isNewUser }) => {
       if (isNewUser) {
         await client.sendMessage(msg.chat.id, "Welcome! This bot will be sending you forwarded SMS messages", {
           parse_mode: "HTML",
@@ -23,10 +24,10 @@ export const allBots: Record<string, TelegramBotHandler> = {
     },
   },
   MailForwardingBot: {
-    handleUpdate: handleEmailForwardingRequest,
+    handleMessage: handleEmailForwardingMessage,
   },
   DebuggerForYourBot: {
-    handleUpdate: async ({ msg, client }) => {
+    handleMessage: async ({ msg, client }) => {
       await client.sendMessage(msg.chat.id, `<pre>${JSON.stringify(msg, null, 2)}</pre>`, {
         parse_mode: "HTML",
       });

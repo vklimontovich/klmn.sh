@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
   const message = bodyJson.message as Message;
 
   const chatId = message.chat.id + "";
-  const existingEntry = await prisma.telegramContacts.findFirst({ where: { chatId } });
+  const existingEntry = await prisma.telegramContacts.findFirst({ where: { chatId, botHandle } });
 
   if (!existingEntry) {
     const userId = message.from?.id + "";
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     });
   }
   try {
-    await allBots[botHandle].handleUpdate({
+    await allBots[botHandle].handleMessage({
       msg: message,
       client: new TelegramBot(bot.botToken),
       isNewUser: !existingEntry,

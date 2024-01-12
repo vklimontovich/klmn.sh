@@ -71,3 +71,13 @@ model TaskQueue {
   key String?
   task Json
 }
+
+model EmailForwarding {
+  id		String      @default(uuid()) @id
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  telegramUserId String
+  forwardTo String
+  confirmed DateTime?
+  confirmationCode String?
+}

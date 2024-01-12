@@ -8,7 +8,6 @@
     "build": "prisma generate && next build",
     "start": "next start -p 6401",
     "lint": "next lint",
-
     "format:check": "prettier --ignore-unknown --check --config ./.prettierrc.json --ignore-path ./.prettierignore $(git diff --name-only --diff-filter d | xargs)",
     "format:check:all": "prettier --check --config ./.prettierrc.json --ignore-path ./.prettierignore .",
     "format": "prettier --ignore-unknown --write --config ./.prettierrc.json --ignore-path ./.prettierignore $(git diff --name-only --diff-filter d | xargs)",
@@ -16,6 +15,7 @@
   },
   "dependencies": {
     "@prisma/client": "5.7.1",
+    "@react-email/components": "^0.0.12",
     "@vercel/og": "^0.5.19",
     "clsx": "^2.0.0",
     "lucide-react": "^0.288.0",
@@ -24,6 +24,7 @@
     "node-telegram-bot-api": "^0.64.0",
     "react": "^18",
     "react-dom": "^18",
+    "react-email": "^1.10.0",
     "resend": "^2.0.0",
     "rss-parser": "^3.13.0",
     "sanitize-html": "^2.11.0",
