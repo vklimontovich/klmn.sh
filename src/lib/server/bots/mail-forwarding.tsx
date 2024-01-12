@@ -8,12 +8,12 @@ import { Hr, Html } from "@react-email/components";
 
 export const helpMessage = `/help - display help
 /status - display current status of your email forwarding
-/setup your@email.com</b> - setup email forwarding, or change email
+/setup your@email.com - setup email forwarding, or change email
 
 For any questions, please contact @v_klmn`;
 
 export const welcomeMessage = ({ userName }: { userName: string }) => `
-👋 Hi <b>${userName}</b>! 
+Hi <b>${userName}</b>! 
 
 I'm the email bot. I can forward messages that you foward me to your email.
 
@@ -91,19 +91,23 @@ export const handleEmailForwardingMessage: MessageHandler = async ({ msg, client
   const forwardedFrom = getName(msg.forward_from) || getName(msg.forward_from_chat) || getName(msg.from) || "unknown";
   try {
     if (isNewUser) {
-      await client.sendMessage(
-        msg.chat.id,
-        welcomeMessage({
-          userName: userName,
-        }),
-        { parse_mode: "HTML" }
-      );
-      return;
+      const welcomeMessageText = welcomeMessage({
+        userName: userName,
+      }).trim();
+      console.log(welcomeMessageText);
+      try {
+        await client.sendMessage(
+          msg.chat.id,
+          welcomeMessageText,
+          { parse_mode: "HTML" }
+        );
+      } catch (e) {
+        //
+      }
     }
     const command = getCommand(msg);
-    console.log("Command", command);
     if (command?.trim() === "help") {
-      await client.sendMessage(msg.chat.id, helpMessage, { parse_mode: "HTML" });
+      await client.sendMessage(msg.chat.id, `<b>Bot commands:</b>\n\n${helpMessage}`, { parse_mode: "HTML" });
       return;
     } else if (command?.trim() === "status") {
       const currentStatus = await prisma.emailForwarding.findFirst({ where: { telegramUserId: msg.from?.id + "" } });

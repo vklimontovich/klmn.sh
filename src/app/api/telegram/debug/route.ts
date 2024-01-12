@@ -18,10 +18,10 @@ export async function GET(request: NextRequest) {
     //   welcomeMessage({ userName: "Vladimir" }),
     //   { parse_mode: "HTML" }
     // );
-    const botInfo = (await prisma.telegramBots.findFirst({ where: { botHandle: "DebuggerForYourBot" } }))!;
+    const botInfo = (await prisma.telegramBots.findFirst({ where: { botHandle: "MailForwardingBot" } }))!;
 
     let msg = {
-      message_id: 57,
+      message_id: 11,
       from: {
         id: 85367,
         is_bot: false,
@@ -38,52 +38,15 @@ export async function GET(request: NextRequest) {
         username: "v_klmn",
         type: "private",
       },
-      date: 1705094159,
-      forward_origin: {
-        type: "channel",
-        chat: {
-          id: -1001118976998,
-          title: "Babchenko",
-          username: "babchenko77",
-          type: "channel",
+      date: 1705095103,
+      text: "/help",
+      entities: [
+        {
+          offset: 0,
+          length: 5,
+          type: "bot_command",
         },
-        message_id: 9040,
-        date: 1705094121,
-      },
-      forward_from_chat: {
-        id: -1001118976998,
-        title: "Babchenko",
-        username: "babchenko77",
-        type: "channel",
-      },
-      forward_from_message_id: 9040,
-      forward_date: 1705094121,
-      video: {
-        duration: 16,
-        width: 512,
-        height: 560,
-        file_name: "IMG_5763.MP4",
-        mime_type: "video/mp4",
-        thumbnail: {
-          file_id: "AAMCAgADGQEAAzlloawPyeD-QhAwLQOSJ8qh2zKeDgACrUAAApY4EEmqOuP6zkJ3ygEAB20AAzQE",
-          file_unique_id: "AQADrUAAApY4EEly",
-          file_size: 10188,
-          width: 293,
-          height: 320,
-        },
-        thumb: {
-          file_id: "AAMCAgADGQEAAzlloawPyeD-QhAwLQOSJ8qh2zKeDgACrUAAApY4EEmqOuP6zkJ3ygEAB20AAzQE",
-          file_unique_id: "AQADrUAAApY4EEly",
-          file_size: 10188,
-          width: 293,
-          height: 320,
-        },
-        file_id: "BAACAgIAAxkBAAM5ZaGsD8ng_kIQMC0DkifKodsyng4AAq1AAAKWOBBJqjrj-s5Cd8o0BA",
-        file_unique_id: "AgADrUAAApY4EEk",
-        file_size: 1439185,
-      },
-      caption:
-        "А вот это прям хорошо. Плешка. Российский ЭКОНОМИЧЕСКИЙ Университет им. Плеханова. Стабильно в ТОП-10. \nВ добрый путь.",
+      ],
     };
     await handleEmailForwardingMessage({
       msg: msg as any,
