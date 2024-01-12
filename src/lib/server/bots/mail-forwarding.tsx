@@ -209,7 +209,7 @@ export const handleEmailForwardingMessage: MessageHandler = async ({ msg, client
     console.error(`Error processing request`, e);
     await client.sendMessage(
       msg.chat.id,
-      `Something went wrong. Please try again later or contact @v_klmn if the problem persists`,
+      `Something went wrong. Please try again later or contact @v_klmn if the problem persists.\n\nMessage content: <pre>${JSON.stringify(msg, null, 2)}</pre>`,
       { parse_mode: "HTML" }
     );
     return;
