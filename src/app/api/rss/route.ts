@@ -8,7 +8,7 @@ import Parser from "rss-parser";
 import { rssTelegram } from "@/lib/server/rss";
 import initServerLogging from "@/lib/server/server-log";
 import { handleTaskQueue, submitTask } from "@/lib/server/task-queue";
-import { log } from "@/app/api/text-message/accept/route";
+import { log } from "@/lib/server/log";
 
 initServerLogging();
 

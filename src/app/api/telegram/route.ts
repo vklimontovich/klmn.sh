@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
-import { log } from "@/app/api/text-message/accept/route";
 import { prisma } from "@/lib/server/prisma";
 import TelegramBot, { Message } from "node-telegram-bot-api";
 import { allBots } from "@/lib/server/bots";
+import { log } from "@/lib/server/log";
 
 function getHost(request: NextRequest) {
   let host: string;

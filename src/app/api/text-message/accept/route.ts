@@ -7,21 +7,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { telegramClient } from "@/lib/server/telegram";
 import VoiceResponse = TwilioSDK.twiml.VoiceResponse;
 import { resend } from "@/lib/server/email";
+import { log } from "@/lib/server/log";
 
 const twilioClient: twilio.Twilio | undefined =
   process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN
     ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
     : undefined;
 
-export async function log(namespace: string, body: any) {
-  console.log(`${new Date().toISOString()} [${namespace}] ${JSON.stringify(body, null, 2)}`);
-  await prisma.log.create({
-    data: {
-      namespace,
-      body,
-    },
-  });
-}
 
 function isNumeric(to: string) {
   return /^\d+$/.test(to);
