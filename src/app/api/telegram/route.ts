@@ -52,7 +52,12 @@ export async function POST(request: NextRequest) {
     return new Response(`Unauthorized. Invalid secret ${request.nextUrl.searchParams.get("secret")}`, { status: 401 });
   }
 
-  const message = (bodyJson.message || bodyJson.edited_message) as Message;
+  const message = (bodyJson.message || bodyJson.edited_message) as Message | undefined;
+
+  if (!message) {
+    //not handling messages like user joined, etc
+    return Response.json({ message: "ok" });
+  }
 
   const chatId = message.chat.id + "";
   const existingEntry = await prisma.telegramContacts.findFirst({ where: { chatId, botHandle } });

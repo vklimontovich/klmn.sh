@@ -121,8 +121,17 @@ model AiChatMessage {
 	message Json
 	telegramMessageId String?
 	telegramMessage TelegramMessages? @relation(fields: [telegramMessageId], references: [id])
-	tokens Decimal @default(0)
-	price Decimal @default(0)
+}
+
+model AiCostsTransactions {
+	id		String      @default(uuid()) @id
+	timestamp DateTime    @default(now())
+	telegramUserId String
+	sessionId String
+	tokens Int
+	model String
+	type String
+	credits Int
 }
 
 model TelegramMessages {

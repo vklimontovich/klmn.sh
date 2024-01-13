@@ -1,7 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/server/prisma";
 import TelegramBot from "node-telegram-bot-api";
-import { handleEmailForwardingMessage } from "@/lib/server/bots/mail-forwarding";
 import { handleAiReq } from "@/lib/server/bots/ai";
 
 export async function GET(request: NextRequest) {
@@ -12,15 +11,28 @@ export async function GET(request: NextRequest) {
         status: 401,
       });
     }
-    // const botInfo = (await prisma.telegramBots.findFirst({ where: { botHandle: "DebuggerForYourBot" } }))!;
-    // await new TelegramBot(botInfo.botToken).sendMessage(
-    //   85367,
-    //
-    //   welcomeMessage({ userName: "Vladimir" }),
-    //   { parse_mode: "HTML" }
-    // );
     const botInfo = (await prisma.telegramBots.findFirst({ where: { botHandle: "AiAttendantBot" } }))!;
-
+    const msg = {
+      message_id: 139,
+      from: {
+        id: 85367,
+        is_bot: false,
+        first_name: "Vladimir",
+        last_name: "Klimontovich",
+        username: "v_klmn",
+        language_code: "en",
+        is_premium: true,
+      },
+      chat: {
+        id: 85367,
+        first_name: "Vladimir",
+        last_name: "Klimontovich",
+        username: "v_klmn",
+        type: "private",
+      },
+      date: 1705168694,
+      text: "Hey, how are you?",
+    };
     let res = await handleAiReq({
       msg: msg as any,
       client: new TelegramBot(botInfo.botToken),
