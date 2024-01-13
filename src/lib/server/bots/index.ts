@@ -2,6 +2,13 @@ import TelegramBot, { Message } from "node-telegram-bot-api";
 import { telegramClient } from "@/lib/server/telegram";
 import { handleEmailForwardingMessage } from "@/lib/server/bots/mail-forwarding";
 
+export function getCommand(msg: Message): string | undefined {
+  if (msg.text && msg.text.startsWith("/")) {
+    return msg.text.substring(1).trim();
+  }
+  return undefined;
+}
+
 export type MessageHandler = (opts: {
   msg: Message;
   client: TelegramBot;
@@ -35,6 +42,9 @@ export const allBots: Record<string, TelegramBotHandler> = {
   },
   DebuggerForYourBot: {
     handleMessage: async ({ msg, client }) => {
+      if (!msg.chat.id) {
+        console.log("No chat id in msg", msg);
+      }
       await client.sendMessage(msg.chat.id, `<pre>${JSON.stringify(msg, null, 2)}</pre>`, {
         parse_mode: "HTML",
       });

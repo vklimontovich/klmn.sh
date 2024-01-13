@@ -91,3 +91,12 @@ model Attachment {
   fileId String
   secret String
 }
+
+model ChatGPTSession {
+	id		String      @default(uuid()) @id
+	createdAt DateTime    @default(now())
+	updatedAt DateTime    @updatedAt
+	closedAt DateTime?
+	sessionId String
+	telegramUserId String
+}

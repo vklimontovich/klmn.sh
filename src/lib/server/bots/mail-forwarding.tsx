@@ -1,4 +1,4 @@
-import { MessageHandler } from "@/lib/server/bots/index";
+import { getCommand, MessageHandler } from "@/lib/server/bots/index";
 import TelegramBot, { Chat, Message, User } from "node-telegram-bot-api";
 import { prisma } from "@/lib/server/prisma";
 import { resend } from "@/lib/server/email";
@@ -21,12 +21,6 @@ To get started, use one of the following commands:
 
 ${helpMessage.trim()}`;
 
-function getCommand(msg: Message): string | undefined {
-  if (msg.text && msg.text.startsWith("/")) {
-    return msg.text.substring(1).trim();
-  }
-  return undefined;
-}
 
 function escapeHtml(text: string) {
   return text
