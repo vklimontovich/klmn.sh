@@ -127,9 +127,9 @@ model AiCostsTransactions {
 	id		String      @default(uuid()) @id
 	timestamp DateTime    @default(now())
 	telegramUserId String
-	sessionId String
-	tokens Int
-	model String
+	sessionId String?
+	tokens Int?
+	model String?
 	type String
 	credits Int
 }
@@ -153,5 +153,14 @@ model AiChatSettings {
 	updatedAt DateTime    @updatedAt
 	telegramUserId String
 	settings Json?
+}
+
+model AiChatState {
+	id	String      @default(uuid()) @id
+	createdAt DateTime    @default(now())
+	updatedAt DateTime    @updatedAt
+	deleteAt DateTime?
+	telegramUserId String
+	state Json?
 }
 
