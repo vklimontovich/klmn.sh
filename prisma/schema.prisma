@@ -29,6 +29,8 @@ model TelegramContacts {
   id        String      @default(uuid()) @id
   createdAt DateTime    @default(now())
   botHandle    String?
+  botId String?
+  bot       TelegramBots? @relation(fields: [botId], references: [id])
   chatId	String
   userId    String
   userName  String?
@@ -40,6 +42,10 @@ model TelegramBots {
    botHandle    String?
    webhookSecret String
    botToken   String
+
+   messages TelegramMessages[]
+   contacts TelegramContacts[]
+   attachments Attachment[]
 }
 
 
@@ -87,16 +93,56 @@ model Attachment {
   id		String      @default(uuid()) @id
   updatedAt DateTime    @updatedAt
   filename String?
+
+  botId String?
+  bot       TelegramBots? @relation(fields: [botId], references: [id])
   botHandle String
+
   fileId String
   secret String
 }
 
-model ChatGPTSession {
+model AiChatSessions {
 	id		String      @default(uuid()) @id
 	createdAt DateTime    @default(now())
 	updatedAt DateTime    @updatedAt
 	closedAt DateTime?
-	sessionId String
 	telegramUserId String
+	chatMessage AiChatMessage[]
 }
+
+
+model AiChatMessage {
+	id		String      @default(uuid()) @id
+	createdAt DateTime    @default(now())
+	updatedAt DateTime    @updatedAt
+	sessionId String
+	session AiChatSessions @relation(fields: [sessionId], references: [id])
+	message Json
+	telegramMessageId String?
+	telegramMessage TelegramMessages? @relation(fields: [telegramMessageId], references: [id])
+	tokens Decimal @default(0)
+	price Decimal @default(0)
+}
+
+model TelegramMessages {
+	id		String      @default(uuid()) @id
+	createdAt DateTime    @default(now())
+    botId String
+    bot       TelegramBots @relation(fields: [botId], references: [id])
+	botHandle String
+	messageId String
+	telegramUserId String
+	payload Json
+	mediaGroupId String?
+	chatMessage AiChatMessage[]
+}
+
+model AiChatSettings {
+	id		String      @default(uuid()) @id
+	createdAt DateTime    @default(now())
+	updatedAt DateTime    @updatedAt
+	telegramUserId String
+	settings Json?
+}
+

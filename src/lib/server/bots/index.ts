@@ -2,11 +2,15 @@ import TelegramBot, { Message } from "node-telegram-bot-api";
 import { telegramClient } from "@/lib/server/telegram";
 import { handleEmailForwardingMessage } from "@/lib/server/bots/mail-forwarding";
 
-export function getCommand(msg: Message): string | undefined {
+export function getCommand(msg: Message): { command: string; args: string[] } | { command: undefined; args?: never } {
   if (msg.text && msg.text.startsWith("/")) {
-    return msg.text.substring(1).trim();
+    const commandLine = msg.text.substring(1).trim();
+    const spaceIndex = commandLine.indexOf(" ");
+    const command = spaceIndex === -1 ? commandLine : commandLine.substring(0, spaceIndex);
+    const args = spaceIndex === -1 ? [] : commandLine.substring(spaceIndex + 1).split(" ");
+    return { command, args };
   }
-  return undefined;
+  return { command: undefined };
 }
 
 export type MessageHandler = (opts: {
@@ -16,7 +20,7 @@ export type MessageHandler = (opts: {
   botToken: string;
   appHost: string;
   botHandle: string;
-}) => Promise<void>;
+}) => Promise<void | Response>;
 export type TelegramBotHandler = {
   handleMessage: MessageHandler;
 };

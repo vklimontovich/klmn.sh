@@ -121,7 +121,7 @@ export const handleEmailForwardingMessage: MessageHandler = async ({
 }) => {
   const userName = getName(msg.from) || "there";
   const forwardedFrom = getName(msg.forward_from) || getName(msg.forward_from_chat) || getName(msg.from) || "unknown";
-  const command = getCommand(msg);
+  const {command} = getCommand(msg);
   try {
     if (isNewUser || command === "start") {
       const welcomeMessageText = welcomeMessage({

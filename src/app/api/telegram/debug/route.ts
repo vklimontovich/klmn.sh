@@ -21,28 +21,7 @@ export async function GET(request: NextRequest) {
     // );
     const botInfo = (await prisma.telegramBots.findFirst({ where: { botHandle: "AiAttendantBot" } }))!;
 
-    let msg = {
-      "message_id": 95,
-      "from": {
-        "id": 85367,
-        "is_bot": false,
-        "first_name": "Vladimir",
-        "last_name": "Klimontovich",
-        "username": "v_klmn",
-        "language_code": "en",
-        "is_premium": true
-      },
-      "chat": {
-        "id": 85367,
-        "first_name": "Vladimir",
-        "last_name": "Klimontovich",
-        "username": "v_klmn",
-        "type": "private"
-      },
-      "date": 1705102505,
-      "text": "Hey, tell me about yourself, how are you trained? Be as elaborate as possibe"
-    };
-    await handleAiReq({
+    let res = await handleAiReq({
       msg: msg as any,
       client: new TelegramBot(botInfo.botToken),
       isNewUser: false,
@@ -50,7 +29,7 @@ export async function GET(request: NextRequest) {
       appHost: "http://localhost:6401",
       botHandle: botInfo.botHandle!,
     });
-    return Response.json({ ok: true });
+    return res || Response.json({ ok: true });
   } catch (e: any) {
     console.log("Request error: " + e?.message || "Unknown error", e);
     return new Response(e?.message || "Unknown error", { status: 500 });

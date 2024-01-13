@@ -56,6 +56,16 @@ export async function POST(request: NextRequest) {
 
   const chatId = message.chat.id + "";
   const existingEntry = await prisma.telegramContacts.findFirst({ where: { chatId, botHandle } });
+  await prisma.telegramMessages.create({
+    data: {
+      messageId: message.message_id + "",
+      telegramUserId: chatId,
+      botId: bot.id,
+      botHandle,
+      payload: message as any,
+      mediaGroupId: message.media_group_id,
+    },
+  });
 
   if (!existingEntry) {
     const userId = message.from?.id + "";
@@ -69,19 +79,24 @@ export async function POST(request: NextRequest) {
       },
     });
   }
+  const client = new TelegramBot(bot.botToken);
   try {
-    await allBots[botHandle].handleMessage({
+    const response = await allBots[botHandle].handleMessage({
       msg: message,
-      client: new TelegramBot(bot.botToken),
+      client: client,
       isNewUser: !existingEntry,
       botToken: bot.botToken,
       appHost: getHost(request),
       botHandle,
     });
+    if (response) {
+      return response;
+    } else {
+      return Response.json({ message: "ok" });
+    }
   } catch (e: any) {
     console.log(`Error handling update for ${bot.botHandle}`, e);
+    await client.sendMessage(chatId, `Internal error ${e?.message}. Please try again later or contact @v_klmn`);
     return new Response(e?.message || "Unknown error", { status: 500 });
   }
-
-  return Response.json({ message: "ok" });
 }
