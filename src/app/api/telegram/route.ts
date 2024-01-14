@@ -4,6 +4,8 @@ import TelegramBot, { Message } from "node-telegram-bot-api";
 import { allBots } from "@/lib/server/bots";
 import { log } from "@/lib/server/log";
 
+export const maxDuration = 120;
+
 function getHost(request: NextRequest) {
   let host: string;
   if (request.headers.get("x-forwarded-host")) {
@@ -101,7 +103,10 @@ export async function POST(request: NextRequest) {
     }
   } catch (e: any) {
     console.log(`Error handling update for ${bot.botHandle}`, e);
-    await client.sendMessage(chatId, `Internal error <code>'${e?.message || "unknown error"}'</code>. Please try again later or contact @v_klmn`);
+    await client.sendMessage(
+      chatId,
+      `Internal error <code>'${e?.message || "unknown error"}'</code>. Please try again later or contact @v_klmn`
+    );
     return new Response(e?.message || "Unknown error", { status: 500 });
   }
 }
