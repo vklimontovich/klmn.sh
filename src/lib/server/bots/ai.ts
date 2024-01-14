@@ -127,8 +127,8 @@ export type ChatState = {
   msg: Message;
 };
 
-//const oneHourMs = 1000 * 60 * 60;
-const oneHourMs = 1000 * 60;
+const oneHourMs = 1000 * 60 * 60;
+//const oneHourMs = 1000 * 60;
 
 async function getChatState(telegramUserId: string): Promise<ChatState | undefined> {
   return (await prisma.aiChatState.findFirst({ where: { telegramUserId, deleteAt: null } }))?.state as any;
