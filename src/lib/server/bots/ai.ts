@@ -20,11 +20,12 @@ function convertMarkdownToTelegramHTML(markdownText: string): string {
 }
 
 const helpMessage = [
-  `I\'m a pay-as-you go alternative to <a href="https://chat.openai.com/">ChatGPT</a>. Instead of paying $20 per month, you can pay per every request which is generally cheaper\n`,
+  `👋 I'm a cost-effective alternative to ChatGPT, offering a <i>pay-per-request</i> service instead of a fixed $20 monthly fee. For most uses-case, it's cheaper\n`,
+  `Billing is based on a credit system. You'll receive <b>1,000</b> credits as a complimentary welcome bonus, generally sufficient for 5-10 conversations. To purchase more credits, simply use the /topup command.\n`,
   `Here's a commands I understand:\n`,
   `/help - this message`,
   `/new - start a new conversation`,
-  `/balance - check your balance. Every new user gets $1 for free`,
+  `/balance - check your balance`,
   `/topup {amount in dollars} - top up your balance. You can top up your balance with any amount of money`,
   `/settings - see your current settings`,
   `/settings {setting} {value} - change your settings. Use /settings for the list of settings`,
@@ -185,6 +186,7 @@ export const handleAiReq: MessageHandler = async ({ msg, client, isNewUser, botT
       async help(opts: { args: string[]; msg: TelegramBot.Message; bot: TelegramBot }): Promise<void> {
         await client.sendMessage(msg.chat.id, helpMessage, {
           parse_mode: "HTML",
+          disable_web_page_preview: true,
         });
       },
       new: async function (opts: { args: string[]; msg: TelegramBot.Message; bot: TelegramBot }): Promise<void> {

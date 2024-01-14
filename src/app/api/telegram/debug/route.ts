@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
         type: "private",
       },
       date: 1705168694,
-      text: "Hey, how are you?",
+      text: "/help",
     };
     let res = await handleAiReq({
       msg: msg as any,
