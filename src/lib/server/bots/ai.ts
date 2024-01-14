@@ -200,7 +200,7 @@ export const handleAiReq: MessageHandler = async ({ msg, client, isNewUser, botT
               await getCostBySession(currentSession!.id)
             )}</b> credits on previous conversation. Your remaining balance is <b>${creditsToString(
               balance
-            )}. Please repeat your previous message to start a new conversation`,
+            )}</b>. Please repeat your previous message to start a new conversation`,
             { parse_mode: "HTML" }
           );
         } else {
