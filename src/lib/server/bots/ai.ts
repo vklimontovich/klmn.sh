@@ -143,7 +143,11 @@ async function clearChatState(telegramUserId: string): Promise<void> {
   await prisma.aiChatState.updateMany({ where: { telegramUserId, deleteAt: null }, data: { deleteAt: new Date() } });
 }
 
-export const handleAiReq: MessageHandler = async ({ msg, client, isNewUser, botToken, appHost, botHandle }) => {
+function removeCommand(text: string) {
+  return text.startsWith("/new") ? text.substring(4).trim() : text;
+}
+
+export const handleAiReq: MessageHandler = async ({ msg, client }) => {
   if (!msg.chat.id) {
     return;
   }
@@ -167,12 +171,134 @@ export const handleAiReq: MessageHandler = async ({ msg, client, isNewUser, botT
     .reduce((acc, item) => (item.getTime() > acc.getTime() ? item : acc), new Date(0));
   const lastSessionActivity =
     currentSession.updatedAt.getTime() > lastMessageDate.getTime() ? currentSession.updatedAt : lastMessageDate;
-  console.log({ currentSession: currentSession.updatedAt, lastMessageDate, now: new Date() });
   const lastChatState = await getChatState(telegramUserId);
 
-  const commandHandlingResult = await handleCommand<
-    "start" | "help" | "new" | "settings" | "balance" | "topup" | "continue"
-  >({
+  async function handlePrompt() {
+    const messages = messageRecords.map(m => m.message as any);
+
+    if (balance <= 0) {
+      await client.sendMessage(
+        msg.chat.id,
+        `You don't have enough credits to continue. Your current balance is <b>${creditsToString(
+          balance
+        )}</b> credits. Use /topup to top up your balance`,
+        { parse_mode: "HTML" }
+      );
+      return;
+    }
+
+    if (lastSessionActivity.getTime() < Date.now() - oneHourMs) {
+      await client.sendMessage(
+        msg.chat.id,
+        `Your last activity on this chat happened <b>${dayjs().to(
+          dayjs(lastSessionActivity)
+        )}</b>. You might want to start a conversation with me. Use /new to start a new conversation. If you want to continue the conversation, use /continue`,
+        {
+          parse_mode: "HTML",
+          reply_markup: newOrContinueMarkup,
+        }
+      );
+      await saveChatState(telegramUserId, { type: "resolve_last_message", msg });
+      return;
+    }
+
+    const content = removeCommand(msg.text!);
+
+    messages.push({ role: "user", content });
+    const model = settings.model;
+    await prisma.aiChatMessage.create({
+      data: {
+        message: { role: "user", content },
+        sessionId: currentSession!.id,
+      },
+    });
+
+    const intputTokens = calculateTokens(messages);
+    await prisma.aiCostsTransactions.create({
+      data: {
+        telegramUserId,
+        sessionId: currentSession.id,
+        credits: getPrice(model, intputTokens, "input"),
+        tokens: intputTokens,
+        type: "input",
+        model,
+      },
+    });
+
+    const res = await openai.chat.completions.create({
+      model: model,
+      //max_tokens: 4096*4,
+      messages,
+      temperature: settings.temperature,
+      stream: true,
+    });
+
+    let currentText = "";
+    const sentMessage = await client.sendMessage(msg.chat.id, "I'm Thinking... 🤔", {
+      parse_mode: "HTML",
+    });
+    let lastMessageTime = Date.now();
+    const stream = OpenAIStream(res, {
+      async onToken(token) {
+        currentText = currentText + token;
+        const sinceLastMessage = Date.now() - lastMessageTime;
+        try {
+          if (sinceLastMessage > 1000) {
+            let messageContent = currentText + "🤔";
+            try {
+              await client.editMessageText(convertMarkdownToTelegramHTML(messageContent), {
+                chat_id: msg.chat.id,
+                message_id: sentMessage.message_id,
+                parse_mode: "HTML",
+              });
+              await client.sendChatAction(msg.chat.id, "typing");
+            } catch (e) {
+              console.warn("error editing message", e);
+            }
+            lastMessageTime = Date.now();
+          }
+        } catch (e) {
+          console.warn("error editing message", e);
+        }
+      },
+      async onCompletion(completion) {
+        const sinceLastMessage = Date.now() - lastMessageTime;
+        if (sinceLastMessage < 1000) {
+          await new Promise(resolve => setTimeout(resolve, 1000 - sinceLastMessage));
+        }
+        try {
+          await prisma.aiChatMessage.create({
+            data: {
+              message: { role: "assistant", content: completion },
+              sessionId: currentSession!.id,
+            },
+          });
+          const outputTokens = calculateTokens(messages);
+          await prisma.aiCostsTransactions.create({
+            data: {
+              telegramUserId,
+              sessionId: currentSession.id,
+              credits: getPrice(model, outputTokens, "output"),
+              tokens: outputTokens,
+              type: "output",
+              model,
+            },
+          });
+          await client.editMessageText(convertMarkdownToTelegramHTML(completion), {
+            chat_id: msg.chat.id,
+            message_id: sentMessage.message_id,
+            parse_mode: "HTML",
+          });
+        } catch (e) {
+          console.error("error finalizing completion", e);
+        }
+      },
+    });
+
+    return new StreamingTextResponse(stream);
+  }
+
+  const commandResult = await handleCommand<"start" | "help" | "new" | "settings" | "balance" | "topup" | "continue">({
     msg,
     bot: client,
     handler: {
@@ -189,28 +315,28 @@ export const handleAiReq: MessageHandler = async ({ msg, client, isNewUser, botT
           disable_web_page_preview: true,
         });
       },
-      new: async function (opts: { args: string[]; msg: TelegramBot.Message; bot: TelegramBot }): Promise<void> {
+      new: async function (opts: { args: string[]; msg: TelegramBot.Message; bot: TelegramBot }): Promise<any> {
         await prisma.aiChatSessions.update({
           where: { id: currentSession!.id },
           data: { closedAt: new Date() },
         });
-        if (lastChatState?.type === "resolve_last_message") {
+        const creditCosts = await getCostBySession(currentSession!.id);
+        const spentMessage =
+          creditCosts > 0 ? `You spent <b>${creditsToString(creditCosts)}</b> credits on previous conversation.` : "";
+        if (opts.args.length > 0) {
+          //do not start a new session if there are arguments
+          return await handlePrompt();
+        } else if (lastChatState?.type === "resolve_last_message") {
           await clearChatState(telegramUserId);
           await client.sendMessage(
             msg.chat.id,
-            `You spent <b>${creditsToString(
-              await getCostBySession(currentSession!.id)
-            )}</b> credits on previous conversation. Your remaining balance is <b>${creditsToString(
-              balance
-            )}</b>. Please repeat your previous message to start a new conversation`,
+            [creditCosts, `Please repeat your previous message to start a new conversation`].filter(Boolean).join(" "),
             { parse_mode: "HTML" }
           );
         } else {
           await client.sendMessage(
             msg.chat.id,
-            `Starting a new conversation. You spent <b>${creditsToString(
-              await getCostBySession(currentSession!.id)
-            )}</b> credits on previous conversation. You're balance is <b>${creditsToString(balance)}</b> credits`,
+            [creditCosts, `Type your message to start conversation`].filter(Boolean).join(" "),
             { parse_mode: "HTML" }
           );
         }
@@ -296,10 +422,10 @@ export const handleAiReq: MessageHandler = async ({ msg, client, isNewUser, botT
     },
   });
 
-  if (commandHandlingResult === "error" || commandHandlingResult === "handled") {
-    //commander sends error message by itself
-    return;
+  if (commandResult.status === "error" || commandResult.status === "handled") {
+    return commandResult.result as Response;
   }
+
   if (lastChatState && lastChatState.type === "resolve_last_message") {
     await client.sendMessage(
       msg.chat.id,
@@ -309,124 +435,5 @@ export const handleAiReq: MessageHandler = async ({ msg, client, isNewUser, botT
     return;
   }
 
-  const messages = messageRecords.map(m => m.message as any);
-
-  if (balance <= 0) {
-    await client.sendMessage(
-      msg.chat.id,
-      `You don't have enough credits to continue. Your current balance is <b>${creditsToString(
-        balance
-      )}</b> credits. Use /topup to top up your balance`,
-      { parse_mode: "HTML" }
-    );
-    return;
-  }
-
-  if (lastSessionActivity.getTime() < Date.now() - oneHourMs) {
-    await client.sendMessage(
-      msg.chat.id,
-      `Your last activity on this chat happened <b>${dayjs().to(
-        dayjs(lastSessionActivity)
-      )}</b>. You might want to start a conversation with me. Use /new to start a new conversation. If you want to continue the conversation, use /continue`,
-      {
-        parse_mode: "HTML",
-        reply_markup: newOrContinueMarkup,
-      }
-    );
-    await saveChatState(telegramUserId, { type: "resolve_last_message", msg });
-    return;
-  }
-
-  messages.push({ role: "user", content: msg.text });
-  const model = settings.model;
-  await prisma.aiChatMessage.create({
-    data: {
-      message: { role: "user", content: msg.text },
-      sessionId: currentSession!.id,
-    },
-  });
-
-  const intputTokens = calculateTokens(messages);
-  await prisma.aiCostsTransactions.create({
-    data: {
-      telegramUserId,
-      sessionId: currentSession.id,
-      credits: getPrice(model, intputTokens, "input"),
-      tokens: intputTokens,
-      type: "input",
-      model,
-    },
-  });
-
-  const res = await openai.chat.completions.create({
-    model: model,
-    //max_tokens: 4096*4,
-    messages,
-    temperature: settings.temperature,
-    stream: true,
-  });
-
-  let currentText = "";
-  const sentMessage = await client.sendMessage(msg.chat.id, "I'm Thinking... 🤔", {
-    parse_mode: "HTML",
-  });
-  let lastMessageTime = Date.now();
-  const stream = OpenAIStream(res, {
-    async onToken(token) {
-      currentText = currentText + token;
-      const sinceLastMessage = Date.now() - lastMessageTime;
-      try {
-        if (sinceLastMessage > 1000) {
-          let messageContent = currentText + "🤔";
-          try {
-            await client.editMessageText(convertMarkdownToTelegramHTML(messageContent), {
-              chat_id: msg.chat.id,
-              message_id: sentMessage.message_id,
-              parse_mode: "HTML",
-            });
-            await client.sendChatAction(msg.chat.id, "typing");
-          } catch (e) {
-            console.log("error editing message", e);
-          }
-          lastMessageTime = Date.now();
-        }
-      } catch (e) {
-        console.log("error editing message", e);
-      }
-    },
-    async onCompletion(completion) {
-      const sinceLastMessage = Date.now() - lastMessageTime;
-      if (sinceLastMessage < 1000) {
-        await new Promise(resolve => setTimeout(resolve, 1000 - sinceLastMessage));
-      }
-      try {
-        await prisma.aiChatMessage.create({
-          data: {
-            message: { role: "assistant", content: completion },
-            sessionId: currentSession!.id,
-          },
-        });
-        const outputTokens = calculateTokens(messages);
-        await prisma.aiCostsTransactions.create({
-          data: {
-            telegramUserId,
-            sessionId: currentSession.id,
-            credits: getPrice(model, outputTokens, "output"),
-            tokens: outputTokens,
-            type: "output",
-            model,
-          },
-        });
-        await client.editMessageText(convertMarkdownToTelegramHTML(completion), {
-          chat_id: msg.chat.id,
-          message_id: sentMessage.message_id,
-          parse_mode: "HTML",
-        });
-      } catch (e) {
-        console.log("error finalizing completion", e);
-      }
-    },
-  });
-
-  return new StreamingTextResponse(stream);
+  return await handlePrompt();
 };
