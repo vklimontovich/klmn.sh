@@ -267,7 +267,7 @@ export const handleAiReq: MessageHandler = async ({ msg, client }) => {
           await new Promise(resolve => setTimeout(resolve, 1000 - sinceLastMessage));
         }
         try {
-          await prisma.aiChatMessage.create({
+          const outputMessage = await prisma.aiChatMessage.create({
             data: {
               message: { role: "assistant", content: completion },
               sessionId: currentSession!.id,
@@ -284,11 +284,23 @@ export const handleAiReq: MessageHandler = async ({ msg, client }) => {
               model,
             },
           });
-          await client.editMessageText(convertMarkdownToTelegramHTML(completion), {
-            chat_id: msg.chat.id,
-            message_id: sentMessage.message_id,
-            parse_mode: "HTML",
-          });
+          try {
+            await client.editMessageText(convertMarkdownToTelegramHTML(completion), {
+              chat_id: msg.chat.id,
+              message_id: sentMessage.message_id,
+              parse_mode: "HTML",
+            });
+          } catch (e: any) {
+            console.error("Error sending final message", e);
+            await client.editMessageText(
+              `Can't display message, telegram has some issues with formatting the message. Message id <code>${outputMessage.id}</code>. Error: <code>${e?.message}/<code>`,
+              {
+                chat_id: msg.chat.id,
+                message_id: sentMessage.message_id,
+                parse_mode: "HTML",
+              }
+            );
+          }
         } catch (e) {
           console.error("error finalizing completion", e);
         }
