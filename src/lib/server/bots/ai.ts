@@ -7,16 +7,25 @@ import { handleCommand } from "@/lib/server/bots/command-handler";
 import TelegramBot, { Message } from "node-telegram-bot-api";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
+import escape from "escape-html";
 
 dayjs.extend(relativeTime);
 const replaceBackticksWithPre = (text: string) => {
   const pattern = /```(.*?)\n\s*(.*?)\n\s*```/gs;
   const replacement = "<pre>$2</pre>";
-  return text.replace(pattern, replacement);
+  text = text.replace(pattern, replacement)
+  console.log("replaced", text)
+  const lastCodeBlock = text.lastIndexOf("```");
+  if (lastCodeBlock !== -1) {
+    text = text.substring(0, lastCodeBlock) + "<pre>" + text.substring(lastCodeBlock + 3) + "</pre>";
+  }
+  console.log("replaced2", text)
+
+  return text;
 };
 
 function convertMarkdownToTelegramHTML(markdownText: string): string {
-  return replaceBackticksWithPre(markdownText);
+  return replaceBackticksWithPre(escape(markdownText));
 }
 
 const helpMessage = [
@@ -242,7 +251,6 @@ export const handleAiReq: MessageHandler = async ({ msg, client }) => {
       async onToken(token) {
         currentText = currentText + token;
         const sinceLastMessage = Date.now() - lastMessageTime;
-        try {
           if (sinceLastMessage > 1000) {
             let messageContent = currentText + "🤔";
             try {
@@ -257,9 +265,6 @@ export const handleAiReq: MessageHandler = async ({ msg, client }) => {
             }
             lastMessageTime = Date.now();
           }
-        } catch (e) {
-          console.warn("error editing message", e);
-        }
       },
       async onCompletion(completion) {
         const sinceLastMessage = Date.now() - lastMessageTime;
@@ -291,12 +296,11 @@ export const handleAiReq: MessageHandler = async ({ msg, client }) => {
               parse_mode: "HTML",
             });
           } catch (e: any) {
-            console.error("Error sending final message", e);
-            await client.editMessageText(
-              `Can't display message, telegram has some issues with formatting the message. Message id <code>${outputMessage.id}</code>. Error: <code>${e?.message}/<code>`,
+            console.error("Error sending final message, sending a error message", e);
+            await client.sendMessage(
+              msg.chat.id,
+              `Unfortunatelly, I can't display message, telegram has some issues with formatting the message. Message id <code>${outputMessage.id}</code>. Error: <code>${e?.message}</code>`,
               {
-                chat_id: msg.chat.id,
-                message_id: sentMessage.message_id,
                 parse_mode: "HTML",
               }
             );
@@ -342,13 +346,13 @@ export const handleAiReq: MessageHandler = async ({ msg, client }) => {
           await clearChatState(telegramUserId);
           await client.sendMessage(
             msg.chat.id,
-            [creditCosts, `Please repeat your previous message to start a new conversation`].filter(Boolean).join(" "),
+            [`Please repeat your previous message to start a new conversation`].filter(Boolean).join(" "),
             { parse_mode: "HTML" }
           );
         } else {
           await client.sendMessage(
             msg.chat.id,
-            [creditCosts, `Type your message to start conversation`].filter(Boolean).join(" "),
+            [`Type your message to start conversation`].filter(Boolean).join(" "),
             { parse_mode: "HTML" }
           );
         }

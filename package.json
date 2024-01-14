@@ -16,11 +16,13 @@
   "dependencies": {
     "@prisma/client": "5.8.0",
     "@react-email/components": "^0.0.12",
+    "@types/escape-html": "^1.0.4",
     "@vercel/og": "^0.5.19",
     "ai": "^2.2.31",
     "clsx": "^2.0.0",
     "dayjs": "^1.11.10",
     "encoding": "^0.1.13",
+    "escape-html": "^1.0.3",
     "gpt-tokenizer": "^2.1.2",
     "htmlparser2": "^9.1.0",
     "lucide-react": "^0.288.0",

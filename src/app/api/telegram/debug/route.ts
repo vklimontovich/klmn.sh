@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
         type: "private",
       },
       date: 1705168694,
-      text: "/new write me a simple TypeScript app that handles incoming messages from a Slack conversion with a bot I'm developing",
+      text: "write me a simple html page, give me it as a code block",
     };
     let res = await handleAiReq({
       msg: msg as any,
