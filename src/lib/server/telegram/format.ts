@@ -151,7 +151,7 @@ export function markdownToTelegram(markdown: string): TelegramFormattedMessage {
   const telegramEntities = parsed.entities.map(getTelegramEntity).filter(Boolean) as any;
 
   return {
-    text: parsed.text,
+    text: parsed.text.trim(),
     entities: telegramEntities,
     parse_mode: undefined,
   };
@@ -162,8 +162,14 @@ export function appendLoadingIndicator(m: TelegramFormattedMessage): TelegramFor
     //not supported
     return m;
   } else {
+    const postfix = `Still thinking... 🤔`;
     return {
-      text: m.text + "...🤔",
+      text:  `${m.text}\n\n${postfix}`,
+      entities: [...(m.entities || []), {
+        type: "italic",
+        offset: m.text.length + 2,
+        length: postfix.length,
+      }],
     };
   }
 }

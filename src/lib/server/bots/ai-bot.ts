@@ -10,6 +10,7 @@ import { tokenCounter } from "@/lib/server/ai/tokenizer";
 import { OpenAI } from "openai";
 import { appendLoadingIndicator, markdownToTelegram } from "@/lib/server/telegram/format";
 import relativeTime from "dayjs/plugin/relativeTime";
+import { omit } from "lodash";
 dayjs.extend(relativeTime);
 
 type AiSettings = {
@@ -139,6 +140,7 @@ async function saveChatState(telegramUserId: string, state: ChatState): Promise<
   await prisma.aiChatState.create({ data: { telegramUserId, state: state as any } });
 }
 
+
 async function handlePrompt(ctx: MessageContext, msg: { text?: string }, bot: TelegramBot) {
   console.log(`handlePrompt`, msg)
   const chatId = parseInt(ctx.telegramUserId);
@@ -208,7 +210,7 @@ async function handlePrompt(ctx: MessageContext, msg: { text?: string }, bot: Te
   });
 
   let currentText = "";
-  const sentMessage = await bot.sendMessage(chatId, "I'm Thinking... 🤔", {
+  const sentMessage = await bot.sendMessage(chatId, "<i>I'm thinking... 🤔</i>", {
     parse_mode: "HTML",
   });
   let lastMessageTime = Date.now();
@@ -282,6 +284,12 @@ async function handlePrompt(ctx: MessageContext, msg: { text?: string }, bot: Te
   });
 
   return new StreamingTextResponse(stream);
+}
+
+function getSettingsString(userSettings: AiSettings) {
+  return Object.entries(omit(userSettings, "model"))
+    .map(([key, value]) => `${key}=${value}`)
+    .join(", ");
 }
 
 export function createAiCommander({
@@ -370,14 +378,63 @@ export function createAiCommander({
       throw new Error(`Not implemented`);
     },
     model: async ({ msg, args }) => {
-      await bot.sendMessage(
-        msg.chat.id,
-        [
-          `Use \`model model-name\`  to set a model. Available models: ${Object.keys(openaiPricing).join(", ")}\n`,
-          `Use \`/model param value\` to set a parameter. Available parameters: temperature.`,
-        ].join("\n"),
-        { parse_mode: "HTML" }
-      );
+      const ctx = await createMessageContext(msg);
+      if (args.length === 0) {
+        await bot.sendMessage(
+          msg.chat.id,
+          [
+            `Current model: <b>${ctx.userSettings.model}</b>. Settings: ${(getSettingsString(ctx.userSettings))}\n`,
+            `Use \`/model model-name\`  to set a model. Available models: ${Object.keys(openaiPricing).join(", ")}\n`,
+            `Use \`/model param value\` to set a parameter. Available parameters: temperature.`,
+          ].join("\n"),
+          { parse_mode: "HTML" }
+        );
+      } else if (args.length === 1) {
+        const newModel = args[0];
+        if (!(newModel in openaiPricing)) {
+          await bot.sendMessage(
+            msg.chat.id,
+            `Unknown model <b>${newModel}</b>. Available models: ${Object.keys(openaiPricing).join(", ")}`,
+            { parse_mode: "HTML" }
+          );
+          return;
+        } else {
+          const newSettings = {...ctx.userSettings, ...{ model: newModel }};
+          await prisma.aiChatSettings.updateMany({
+            where: { telegramUserId: ctx.telegramUserId },
+            data: { settings: newSettings },
+          });
+          await bot.sendMessage(
+            msg.chat.id,
+            `✅ Model was updated to <b>${newModel}</b>`,
+            { parse_mode: "HTML" }
+          );
+          return;
+        }
+      } else if (args.length == 2) {
+        const [key, value] = args;
+        if (key === "temperature") {
+          const parsed = parseFloat(value);
+          if (isNaN(parsed) || parsed < 0 || parsed > 1) {
+            await bot.sendMessage(msg.chat.id, `❌Invalid value for temperature: <b>${value}</b>`, {
+              parse_mode: "HTML",
+            });
+          } else {
+            const newSettings = {...ctx.userSettings, ...{ temperature: parsed }};
+            await prisma.aiChatSettings.updateMany({
+              where: { telegramUserId: ctx.telegramUserId },
+              data: { settings: newSettings },
+            });
+            await bot.sendMessage(msg.chat.id, `✅Temperature set to <b>${parsed}</b>. New settings: ${getSettingsString(newSettings)}`, {
+              parse_mode: "HTML",
+            });
+          }
+        } else {
+          await bot.sendMessage(msg.chat.id, `❌Unknown parameter: <b>${key}</b>`, {
+            parse_mode: "HTML",
+          });
+        }
+      }
     },
     $default: async ({ msg }) => {
       const ctx = await createMessageContext(msg);

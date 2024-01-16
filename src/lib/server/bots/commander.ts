@@ -56,6 +56,7 @@ export function telegramCommandDispatcher<C extends RequiredTelegramCommands = R
   return {
     dispatch: async (msg: Message) => {
       const text = msg.text;
+      await bot.sendChatAction(msg.chat.id, "typing");
       if (text && text.startsWith("/")) {
         const [command, ...args] = text.substring(1).split(" ");
         if (command in commander) {
