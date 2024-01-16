@@ -1,6 +1,7 @@
 import TelegramBot, { Message } from "node-telegram-bot-api";
 import { handleEmailForwardingMessage } from "@/lib/server/bots/mail-forwarding";
-import { handleAiReq } from "@/lib/server/bots/ai";
+import { createAiCommander } from "@/lib/server/bots/ai-bot";
+import { telegramCommandDispatcher, testEnvBotToken } from "@/lib/server/bots/commander";
 
 export function getCommand(msg: Message): { command: string; args: string[] } | { command: undefined; args?: never } {
   if (msg.text && msg.text.startsWith("/")) {
@@ -42,7 +43,10 @@ export const allBots: Record<string, TelegramBotHandler> = {
     },
   },
   AiAttendantBot: {
-    handleMessage: handleAiReq,
+    handleMessage: ({msg, client}) => {
+      const aiCommander = createAiCommander({ bot: client });
+      return telegramCommandDispatcher({ commander: aiCommander as any, bot: client }).dispatch(msg);
+    },
   },
   MailForwardingBot: {
     handleMessage: handleEmailForwardingMessage,

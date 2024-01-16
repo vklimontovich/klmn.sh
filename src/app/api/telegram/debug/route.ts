@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/server/prisma";
 import TelegramBot from "node-telegram-bot-api";
-import { handleAiReq } from "@/lib/server/bots/ai";
+import { createAiCommander } from "@/lib/server/bots/ai-bot";
+import { botCommanderTest, testEnvBotToken } from "@/lib/server/bots/commander";
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,37 +12,17 @@ export async function GET(request: NextRequest) {
         status: 401,
       });
     }
-    const botInfo = (await prisma.telegramBots.findFirst({ where: { botHandle: "AiAttendantBot" } }))!;
-    const msg = {
-      message_id: 139,
-      from: {
-        id: 85367,
-        is_bot: false,
-        first_name: "Vladimir",
-        last_name: "Klimontovich",
-        username: "v_klmn",
-        language_code: "en",
-        is_premium: true,
-      },
-      chat: {
-        id: 85367,
-        first_name: "Vladimir",
-        last_name: "Klimontovich",
-        username: "v_klmn",
-        type: "private",
-      },
-      date: 1705168694,
-      text: "write me a simple html page, give me it as a code block",
-    };
-    let res = await handleAiReq({
-      msg: msg as any,
-      client: new TelegramBot(botInfo.botToken),
-      isNewUser: false,
-      botToken: botInfo.botToken,
-      appHost: "http://localhost:6401",
-      botHandle: botInfo.botHandle!,
-    });
-    return (res as Response) || Response.json({ ok: true });
+    const aiCommander = createAiCommander({ bot: new TelegramBot(testEnvBotToken!, { polling: false }) });
+    const tester = botCommanderTest({ commander: aiCommander as any, botToken: testEnvBotToken });
+
+    //const result = await tester.testMessage({ text: "Write me a sample HTML page code" });
+    //const result = await tester.testMessage({ text: "Write me an example markdown document that contains as many elements of markdown as possible" });
+    //const result = await tester.testMessage({ text: "/new give me a us budget per year from 2018 to 2020 as table with following columns: revenue, expenses, deficit. Fo" });
+    const result = await tester.testMessage({ text: "/new" });
+    //const result = await tester.testMessage({ text: "What's up?" });
+    //const result = await tester.testMessage({ text: "/_debugContext" });
+    //const result = await tester.testMessage({ text: "What's up?" });
+    return result;
   } catch (e: any) {
     console.log("Request error: " + e?.message || "Unknown error", e);
     return new Response(e?.message || "Unknown error", { status: 500 });
