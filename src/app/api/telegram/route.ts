@@ -103,10 +103,10 @@ export async function POST(request: NextRequest) {
     }
   } catch (e: any) {
     console.log(`Error handling update for ${bot.botHandle}`, e);
-    // await client.sendMessage(
-    //   chatId,
-    //   `Internal error <code>'${e?.message || "unknown error"}'</code>. Bot: ${botHandle}. Message: ${JSON.stringify(message, null, 2)} Please try again later or contact @v_klmn`
-    // );
-    return new Response(e?.message || "Unknown error", { status: 500 });
+    await client.sendMessage(
+      chatId,
+      `Internal error <code>'${e?.message || "unknown error"}'</code>. Bot: ${botHandle}. Message: ${JSON.stringify(message, null, 2)} Please try again later or contact @v_klmn`
+    );
+    return new Response(e?.message || "Unknown error", { status: 200 });
   }
 }
