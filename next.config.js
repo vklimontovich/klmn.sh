@@ -4,14 +4,14 @@ const nextConfig = {
   options: {
     sourcemaps: 'production'
   },
-  webpack(config, { isServer, dev }) {
-    config.experiments = {
-      asyncWebAssembly: true,
-      layers: true,
-    };
-
-    return config;
-  },
+  // webpack(config, { isServer, dev }) {
+  //   config.experiments = {
+  //     asyncWebAssembly: true,
+  //     layers: true,
+  //   };
+  //
+  //   return config;
+  // },
 }
 
 module.exports = nextConfig

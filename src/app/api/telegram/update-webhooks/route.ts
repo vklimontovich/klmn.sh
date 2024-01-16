@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     const result = [];
     for (const bot of allBots) {
 
-      const url = `${host}/api/telegram?bot=${bot.botHandle}&secret=${bot.webhookSecret}`;
+      const url = `${host}/api/telegram?created=${encodeURIComponent(new Date().toISOString())}&bot=${bot.botHandle}&secret=${bot.webhookSecret}`;
       try {
         const updateResult = await new TelegramBot(bot.botToken).setWebHook(
           url,
