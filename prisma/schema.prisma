@@ -131,7 +131,7 @@ model AiCostsTransactions {
 	tokens Int?
 	model String?
 	type String
-	credits Int
+	credits Decimal
 }
 
 model TelegramMessages {

@@ -1,8 +1,7 @@
 import { BotCommander } from "@/lib/server/bots/commander";
 import TelegramBot, { Message } from "node-telegram-bot-api";
 import { prisma } from "@/lib/server/prisma";
-import { AiChatMessage, AiChatSessions } from "@prisma/client";
-import { encode } from "gpt-tokenizer";
+import { AiChatSessions } from "@prisma/client";
 import { openaiPricing } from "@/lib/server/bots/pricing/openai";
 import dayjs from "dayjs";
 import { OpenAIStream, StreamingTextResponse } from "ai";
@@ -11,11 +10,13 @@ import { OpenAI } from "openai";
 import { appendLoadingIndicator, markdownToTelegram } from "@/lib/server/telegram/format";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { omit } from "lodash";
+
 dayjs.extend(relativeTime);
 
 type AiSettings = {
   model: string;
   temperature: number;
+  verbose: boolean;
 };
 
 const openai = new OpenAI({
@@ -72,6 +73,7 @@ export type ChatState = {
 const defaultAiSettings: AiSettings = {
   model: "gpt-4",
   temperature: 0.7,
+  verbose: false,
 };
 
 export type MessageContext = {
@@ -133,7 +135,7 @@ function generateHelp(commander: Required<Pick<BotCommander, "$descriptions">>):
     .join("\n");
 }
 
-const oneHourMs = 1000 * 60;
+const oneHourMs = 1000 * 60 * 60;
 
 async function saveChatState(telegramUserId: string, state: ChatState): Promise<void> {
   await clearChatState(telegramUserId);
@@ -142,7 +144,6 @@ async function saveChatState(telegramUserId: string, state: ChatState): Promise<
 
 
 async function handlePrompt(ctx: MessageContext, msg: { text?: string }, bot: TelegramBot) {
-  console.log(`handlePrompt`, msg)
   const chatId = parseInt(ctx.telegramUserId);
   if (!msg.text) {
     await bot.sendMessage(chatId, `I can handle only text messages so far`, { parse_mode: "HTML" });
@@ -193,7 +194,7 @@ async function handlePrompt(ctx: MessageContext, msg: { text?: string }, bot: Te
   await prisma.aiCostsTransactions.create({
     data: {
       telegramUserId: ctx.telegramUserId,
-      sessionId: ctx.telegramUserId,
+      sessionId: ctx.currentSession.id,
       credits: getPrice(model, intputTokens, "input"),
       tokens: intputTokens,
       type: "input",
@@ -221,8 +222,6 @@ async function handlePrompt(ctx: MessageContext, msg: { text?: string }, bot: Te
       if (sinceLastMessage > 1000) {
         try {
           const formattedMessage = appendLoadingIndicator(markdownToTelegram(currentText));
-          console.log(`sending message`, formattedMessage);
-          console.log(`sending message`, formattedMessage.entities);
           await bot.editMessageText(formattedMessage.text, {
             chat_id: chatId,
             message_id: sentMessage.message_id,
@@ -241,6 +240,7 @@ async function handlePrompt(ctx: MessageContext, msg: { text?: string }, bot: Te
       if (sinceLastMessage < 1000) {
         await new Promise(resolve => setTimeout(resolve, 1000 - sinceLastMessage));
       }
+
       try {
         const outputMessage = await prisma.aiChatMessage.create({
           data: {
@@ -248,7 +248,7 @@ async function handlePrompt(ctx: MessageContext, msg: { text?: string }, bot: Te
             sessionId: ctx.currentSession.id,
           },
         });
-        const outputTokens = 0;
+        const outputTokens = tokenCounter(completion);
         await prisma.aiCostsTransactions.create({
           data: {
             telegramUserId: ctx.telegramUserId,
@@ -277,6 +277,32 @@ async function handlePrompt(ctx: MessageContext, msg: { text?: string }, bot: Te
             }
           );
         }
+        if (ctx.userSettings.verbose) {
+          function format(price: number) {
+            if (price < 10) {
+              return price.toFixed(2);
+            } else {
+              return price.toLocaleString("en-US", { maximumFractionDigits: 0 });
+            }
+          }
+
+          const inputCredits = getPrice(model, outputTokens, "input");
+          const outputCredits = getPrice(model, outputTokens, "output");
+          await bot.sendMessage(
+            chatId,
+            [
+              `🤖 Prompt stat:\n`,
+              `<code>output=${outputTokens}, input=${intputTokens}</code>`,
+              `<code>outputCredits=${format(outputCredits)}, inputCredits=${format(
+                inputCredits
+              )}, totalCredits=${format(inputCredits + outputCredits)}</code>`,
+              `<code>historicMessages=${messageRecords.length}</code>`,
+            ].join("\n"),
+            {
+              parse_mode: "HTML",
+            }
+          );
+        }
       } catch (e) {
         console.error("error finalizing completion", e);
       }
@@ -296,7 +322,7 @@ export function createAiCommander({
   bot: _bot,
 }: {
   bot: TelegramBot | string;
-}): BotCommander<"start" | "new" | "continue" | "balance" | "topup" | "model" | "_debugContext", Message> {
+}): BotCommander<"start" | "new" | "continue" | "balance" | "topup" | "model" | "_debugContext" | "pricing", Message> {
   const $descriptions = {
     start: "Display help message",
     new: "Reset previous conversation with AI assistant and start a new one",
@@ -304,7 +330,8 @@ export function createAiCommander({
     balance: "Show current balance",
     topup: "Topup balance",
     model: "Change model or model settings",
-    _debugContext: "Show debug context",
+    pricing: "Show pricing",
+    _debugContext: "Show debug info",
   };
   const bot = typeof _bot === "string" ? new TelegramBot(_bot) : _bot;
 
@@ -312,11 +339,7 @@ export function createAiCommander({
     $descriptions,
     _debugContext: async ({ msg }) => {
       const ctx = await createMessageContext(msg);
-      await bot.sendMessage(
-        msg.chat.id,
-        `<pre>${JSON.stringify(ctx, null, 2)}</pre>`,
-        { parse_mode: "HTML" }
-      );
+      await bot.sendMessage(msg.chat.id, `<pre>${JSON.stringify(ctx, null, 2)}</pre>`, { parse_mode: "HTML" });
     },
     start: async ({ msg }) => {
       await bot.sendMessage(
@@ -377,13 +400,35 @@ export function createAiCommander({
     topup: async ({ msg }) => {
       throw new Error(`Not implemented`);
     },
+    pricing: async ({ msg, args }) => {
+      function format(input1k: number) {
+        if (input1k < 10) {
+          return input1k.toFixed(2);
+        } else {
+          return input1k.toLocaleString("en-US", { maximumFractionDigits: 0 });
+        }
+      }
+
+      await bot.sendMessage(
+        msg.chat.id,
+        [
+          `💸 Here's my pricing info:\n`,
+          ...Object.entries(openaiPricing).map(([model, { input1k, output1k }]) => {
+            return ` - <b>${model}</b>: ${format(input1k)} credits per 1k tokens input, ${format(
+              output1k
+            )} credits per 1k tokens output`;
+          }),
+        ].join("\n"),
+        { parse_mode: "HTML" }
+      );
+    },
     model: async ({ msg, args }) => {
       const ctx = await createMessageContext(msg);
       if (args.length === 0) {
         await bot.sendMessage(
           msg.chat.id,
           [
-            `Current model: <b>${ctx.userSettings.model}</b>. Settings: ${(getSettingsString(ctx.userSettings))}\n`,
+            `Current model: <b>${ctx.userSettings.model}</b>. Settings: ${getSettingsString(ctx.userSettings)}\n`,
             `Use \`/model model-name\`  to set a model. Available models: ${Object.keys(openaiPricing).join(", ")}\n`,
             `Use \`/model param value\` to set a parameter. Available parameters: temperature.`,
           ].join("\n"),
@@ -399,16 +444,12 @@ export function createAiCommander({
           );
           return;
         } else {
-          const newSettings = {...ctx.userSettings, ...{ model: newModel }};
+          const newSettings = { ...ctx.userSettings, ...{ model: newModel } };
           await prisma.aiChatSettings.updateMany({
             where: { telegramUserId: ctx.telegramUserId },
             data: { settings: newSettings },
           });
-          await bot.sendMessage(
-            msg.chat.id,
-            `✅ Model was updated to <b>${newModel}</b>`,
-            { parse_mode: "HTML" }
-          );
+          await bot.sendMessage(msg.chat.id, `✅ Model was updated to <b>${newModel}</b>`, { parse_mode: "HTML" });
           return;
         }
       } else if (args.length == 2) {
@@ -420,15 +461,33 @@ export function createAiCommander({
               parse_mode: "HTML",
             });
           } else {
-            const newSettings = {...ctx.userSettings, ...{ temperature: parsed }};
+            const newSettings = { ...ctx.userSettings, ...{ temperature: parsed } };
             await prisma.aiChatSettings.updateMany({
               where: { telegramUserId: ctx.telegramUserId },
               data: { settings: newSettings },
             });
-            await bot.sendMessage(msg.chat.id, `✅Temperature set to <b>${parsed}</b>. New settings: ${getSettingsString(newSettings)}`, {
-              parse_mode: "HTML",
-            });
+            await bot.sendMessage(
+              msg.chat.id,
+              `✅Temperature set to <b>${parsed}</b>. New settings: ${getSettingsString(newSettings)}`,
+              {
+                parse_mode: "HTML",
+              }
+            );
           }
+        } else if (key === "verbose") {
+          const val = Boolean(value);
+          const newSettings = { ...ctx.userSettings, ...{ verbose: val } };
+          await prisma.aiChatSettings.updateMany({
+            where: { telegramUserId: ctx.telegramUserId },
+            data: { settings: newSettings },
+          });
+          await bot.sendMessage(
+            msg.chat.id,
+            `✅Verbosity set to <b>${val}</b>. New settings: ${getSettingsString(newSettings)}`,
+            {
+              parse_mode: "HTML",
+            }
+,          );
         } else {
           await bot.sendMessage(msg.chat.id, `❌Unknown parameter: <b>${key}</b>`, {
             parse_mode: "HTML",
