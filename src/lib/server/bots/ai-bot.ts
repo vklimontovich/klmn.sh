@@ -459,7 +459,7 @@ export function createAiCommander({
           mode: "payment",
           line_items: [
             {
-              price: "price_1OZblWBwgYz87x23UEgdzwrs",
+              price: price.data[0].id,
               quantity: creditsRounded / 1000,
             },
           ],
