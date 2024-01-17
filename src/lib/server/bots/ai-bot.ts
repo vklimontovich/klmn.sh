@@ -11,6 +11,10 @@ import { appendLoadingIndicator, markdownToTelegram } from "@/lib/server/telegra
 import relativeTime from "dayjs/plugin/relativeTime";
 import { omit } from "lodash";
 import Anthropic from "@anthropic-ai/sdk";
+import { applicationHost } from "@/lib/server/app-base";
+
+import jwt from "jsonwebtoken";
+import { billing, creditsToString, getCostByUser } from "@/lib/server/billing";
 
 dayjs.extend(relativeTime);
 
@@ -19,6 +23,7 @@ type AiSettings = {
   temperature: number;
   verbose: boolean;
 };
+
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -37,23 +42,6 @@ function getPrice(model: string, tokens: number, type: "input" | "output"): numb
 async function getCostBySession(sessionId: string): Promise<number> {
   const res = await prisma.aiCostsTransactions.aggregate({ where: { sessionId }, _sum: { credits: true } });
   return res?._sum?.credits?.toNumber() || 0;
-}
-
-async function getCostByUser(telegramUserId: string): Promise<number> {
-  const res = await prisma.aiCostsTransactions.aggregate({ where: { telegramUserId }, _sum: { credits: true } });
-  return 1000 - (res?._sum?.credits?.toNumber() || 0);
-}
-
-function creditsToString(credits: number): string {
-  if (credits === 0) {
-    return "0";
-  } else if (credits < 0.1) {
-    return credits.toFixed(4);
-  } else if (credits < 100) {
-    return credits.toFixed(2);
-  } else {
-    return credits.toLocaleString("en-US", { maximumFractionDigits: 0 });
-  }
 }
 
 
@@ -163,7 +151,7 @@ async function handlePrompt(ctx: MessageContext, msg: { text?: string }, bot: Te
   if (ctx.balance <= 0) {
     await bot.sendMessage(
       chatId,
-      `You don't have enough credits to continue. Your current balance is <b>${creditsToString(
+      `🚨You don't have enough credits to continue. Your current balance is <b>${creditsToString(
         ctx.balance
       )}</b> credits. Use /topup to top up your balance`,
       { parse_mode: "HTML" }
@@ -423,7 +411,77 @@ export function createAiCommander({
       );
     },
     topup: async ({ msg, args }) => {
-      await bot.sendMessage(msg.chat.id, ``);
+      if (!billing) {
+        await bot.sendMessage(msg.chat.id, `Billing is disabled`, { parse_mode: "HTML" });
+        return;
+      }
+      if (args.length === 0) {
+        await bot.sendMessage(
+          msg.chat.id,
+          `Please specify the amount of credits you want to buy. For example, /topup 5000. The minimum amount is <b>5,000</b> credits, the maximum is <b>90,000</b>`,
+          { parse_mode: "HTML" }
+        );
+      } else if (args.length > 1) {
+        await bot.sendMessage(msg.chat.id, `❌You can buy only one amount of credits at once.`, {
+          parse_mode: "HTML",
+        });
+        return;
+      } else if (args.length === 1) {
+        const credits = parseInt(args[0].replaceAll(",", ""));
+        if (credits < 5000 || credits > 90000) {
+          await bot.sendMessage(msg.chat.id, `You can buy only from 5000 to 90,000 credits at once.`, {
+            parse_mode: "HTML",
+          });
+          return;
+        }
+
+        const price = await billing.prices.search({
+          query: `metadata["objectId"]:"ai_chat_credits"`,
+        });
+        if (!price.data || price.data.length === 0) {
+          throw new Error(`Price not found`);
+        }
+        const paymentId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+
+        const cipher = jwt.sign(
+          {
+            type: "aiBotTopup",
+            botHandle: (await bot.getMe()).username,
+            paymentId,
+            telegramUserId: msg.chat.id + "",
+            credits: credits,
+          },
+          process.env.STRIPE_SECRET_KEY!
+        );
+
+        const creditsRounded = Math.round(credits / 1000) * 1000;
+        const checkoutSession = await billing.checkout.sessions.create({
+          mode: "payment",
+          line_items: [
+            {
+              price: "price_1OZblWBwgYz87x23UEgdzwrs",
+              quantity: creditsRounded / 1000,
+            },
+          ],
+          metadata: {
+            paymentId: paymentId,
+          },
+          client_reference_id: paymentId,
+          expires_at: Math.round(Date.now() / 1000) + 60 * 60,
+          success_url: `${applicationHost}/api/stripe-callback?cipher=${cipher}&status=success`,
+          cancel_url: `${applicationHost}/api/stripe-callback?cipher=${cipher}&status=cancelled`,
+        });
+
+        await bot.sendMessage(
+          msg.chat.id,
+          `💸Please <b><a href="${
+            checkoutSession.url
+          }">click here</a></b> to proceed with payment for <b>${creditsToString(
+            creditsRounded
+          )}</b> in amount of <b>$${creditsRounded / 1000}</b>.`,
+          { parse_mode: "HTML", disable_web_page_preview: true }
+        );
+      }
     },
     pricing: async ({ msg, args }) => {
       function format(input1k: number) {
