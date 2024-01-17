@@ -7,15 +7,15 @@ import { render } from "@react-email/render";
 import { Hr, Html } from "@react-email/components";
 
 export const helpMessage = `/help - display help
-/status - display current status of your email forwarding
-/setup your@email.com - setup email forwarding, or change email
+/status - display current settings of your email forwarding
+/setup your@email.com - setup email forwarding, or change email. After email is set up, just forward messages to me and they will appear in your inbox
 
-For any questions, please contact @v_klmn`;
+Found a bug or experiencing any issues? Contact @v_klmn`;
 
 export const welcomeMessage = ({ userName }: { userName: string }) => `
 👋Hi <b>${userName}</b>! 
 
-I'm the email bot. I can forward messages that you foward me to your email.
+I'm the email forwarding bot. I can forward telegram messages to email.
 
 To get started, use one of the following commands:
 
@@ -123,15 +123,16 @@ export const handleEmailForwardingMessage: MessageHandler = async ({
   const forwardedFrom = getName(msg.forward_from) || getName(msg.forward_from_chat) || getName(msg.from) || "unknown";
   const {command} = getCommand(msg);
   try {
-    if (isNewUser || command === "start") {
+    if (command === "start") {
       const welcomeMessageText = welcomeMessage({
         userName: userName,
       }).trim();
       console.log(welcomeMessageText);
       await client.sendMessage(msg.chat.id, welcomeMessageText, { parse_mode: "HTML" });
+      return;
     }
     if (command?.trim() === "help") {
-      await client.sendMessage(msg.chat.id, `<b>Bot commands:</b>\n\n${helpMessage}`, { parse_mode: "HTML" });
+      await client.sendMessage(msg.chat.id, `<b>🚀I understand following commands </b>\n\n${helpMessage}\n\nHappy forwarding!`, { parse_mode: "HTML" });
       return;
     } else if (command?.trim() === "status") {
       const currentStatus = await prisma.emailForwarding.findFirst({ where: { telegramUserId: msg.from?.id + "" } });
@@ -272,7 +273,7 @@ export const handleEmailForwardingMessage: MessageHandler = async ({
           "X-Entity-Ref-ID": Math.random().toString(36).substring(2, 15),
         },
       });
-      await client.sendMessage(msg.chat.id, `Your message was forwarded to <b>${email}</b>`, { parse_mode: "HTML" });
+      await client.sendMessage(msg.chat.id, `📧Your message has been forwarded to <b>${email}</b>!`, { parse_mode: "HTML" });
     }
   } catch (e: any) {
     console.error(`Error processing request`, e);
