@@ -2,14 +2,15 @@ import { BotCommander } from "@/lib/server/bots/commander";
 import TelegramBot, { Message } from "node-telegram-bot-api";
 import { prisma } from "@/lib/server/prisma";
 import { AiChatSessions } from "@prisma/client";
-import { openaiPricing } from "@/lib/server/bots/pricing/openai";
+import { models } from "@/lib/server/bots/pricing/openai";
 import dayjs from "dayjs";
-import { OpenAIStream, StreamingTextResponse } from "ai";
+import { AIStreamCallbacksAndOptions, AnthropicStream, OpenAIStream, StreamingTextResponse } from "ai";
 import { tokenCounter } from "@/lib/server/ai/tokenizer";
 import { OpenAI } from "openai";
 import { appendLoadingIndicator, markdownToTelegram } from "@/lib/server/telegram/format";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { omit } from "lodash";
+import Anthropic from "@anthropic-ai/sdk";
 
 dayjs.extend(relativeTime);
 
@@ -23,9 +24,13 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTROPIC_API_KEY,
+});
+
 
 function getPrice(model: string, tokens: number, type: "input" | "output"): number {
-  const price = openaiPricing[model] || openaiPricing["gpt-4"];
+  const price = models[model] || models["gpt-4"];
   return price[`${type}1k`] * (tokens / 1000);
 }
 
@@ -135,7 +140,7 @@ function generateHelp(commander: Required<Pick<BotCommander, "$descriptions">>):
     .join("\n");
 }
 
-const oneHourMs = 1000 * 60 * 60;
+const oneHourMs = 60 * 60 * 1000;
 
 async function saveChatState(telegramUserId: string, state: ChatState): Promise<void> {
   await clearChatState(telegramUserId);
@@ -183,6 +188,11 @@ async function handlePrompt(ctx: MessageContext, msg: { text?: string }, bot: Te
 
   messages.push({ role: "user", content });
   const model = ctx.userSettings.model;
+  const modelInfo = models[model];
+  if (!modelInfo) {
+    throw new Error(`Unknown model '${model}'`)
+
+  }
   await prisma.aiChatMessage.create({
     data: {
       message: { role: "user", content },
@@ -202,20 +212,13 @@ async function handlePrompt(ctx: MessageContext, msg: { text?: string }, bot: Te
     },
   });
 
-  const res = await openai.chat.completions.create({
-    model,
-    //max_tokens: 4096*4,
-    messages,
-    temperature: ctx.userSettings.temperature,
-    stream: true,
-  });
-
   let currentText = "";
   const sentMessage = await bot.sendMessage(chatId, "<i>I'm thinking... 🤔</i>", {
     parse_mode: "HTML",
   });
   let lastMessageTime = Date.now();
-  const stream = OpenAIStream(res, {
+
+  const completionHandler: AIStreamCallbacksAndOptions = {
     async onToken(token) {
       currentText = currentText + token;
       const sinceLastMessage = Date.now() - lastMessageTime;
@@ -307,7 +310,29 @@ async function handlePrompt(ctx: MessageContext, msg: { text?: string }, bot: Te
         console.error("error finalizing completion", e);
       }
     },
-  });
+  };
+  let stream: ReadableStream<any>;
+  stream =
+    modelInfo.api === "openai"
+      ? OpenAIStream(
+          await openai.chat.completions.create({
+            model,
+            //max_tokens: 4096*4,
+            messages,
+            temperature: ctx.userSettings.temperature,
+            stream: true,
+          }),
+          completionHandler
+        )
+      : AnthropicStream(
+          await anthropic.beta.messages.create({
+            messages,
+            model,
+            stream: true,
+            max_tokens: 300,
+          }),
+          completionHandler
+        );
 
   return new StreamingTextResponse(stream);
 }
@@ -397,8 +422,8 @@ export function createAiCommander({
         { parse_mode: "HTML" }
       );
     },
-    topup: async ({ msg }) => {
-      throw new Error(`Not implemented`);
+    topup: async ({ msg, args }) => {
+      await bot.sendMessage(msg.chat.id, ``);
     },
     pricing: async ({ msg, args }) => {
       function format(input1k: number) {
@@ -413,8 +438,8 @@ export function createAiCommander({
         msg.chat.id,
         [
           `💸 Here's my pricing info:\n`,
-          ...Object.entries(openaiPricing).map(([model, { input1k, output1k }]) => {
-            return ` - <b>${model}</b>: ${format(input1k)} credits per 1k tokens input, ${format(
+          ...Object.entries(models).map(([model, { input1k, output1k, api }]) => {
+            return ` - <b>${model}</b> <i>(${api})</i>: ${format(input1k)} credits per 1k tokens input, ${format(
               output1k
             )} credits per 1k tokens output`;
           }),
@@ -429,17 +454,17 @@ export function createAiCommander({
           msg.chat.id,
           [
             `Current model: <b>${ctx.userSettings.model}</b>. Settings: ${getSettingsString(ctx.userSettings)}\n`,
-            `Use \`/model model-name\`  to set a model. Available models: ${Object.keys(openaiPricing).join(", ")}\n`,
+            `Use \`/model model-name\`  to set a model. Available models: ${Object.keys(models).join(", ")}\n`,
             `Use \`/model param value\` to set a parameter. Available parameters: temperature.`,
           ].join("\n"),
           { parse_mode: "HTML" }
         );
       } else if (args.length === 1) {
         const newModel = args[0];
-        if (!(newModel in openaiPricing)) {
+        if (!(newModel in models)) {
           await bot.sendMessage(
             msg.chat.id,
-            `Unknown model <b>${newModel}</b>. Available models: ${Object.keys(openaiPricing).join(", ")}`,
+            `Unknown model <b>${newModel}</b>. Available models: ${Object.keys(models).join(", ")}`,
             { parse_mode: "HTML" }
           );
           return;
