@@ -31,12 +31,12 @@ function getPrice(model: string, tokens: number, type: "input" | "output"): numb
 
 async function getCostBySession(sessionId: string): Promise<number> {
   const res = await prisma.aiCostsTransactions.aggregate({ where: { sessionId }, _sum: { credits: true } });
-  return res?._sum?.credits || 0;
+  return res?._sum?.credits?.toNumber() || 0;
 }
 
 async function getCostByUser(telegramUserId: string): Promise<number> {
   const res = await prisma.aiCostsTransactions.aggregate({ where: { telegramUserId }, _sum: { credits: true } });
-  return 1000 - (res?._sum?.credits || 0);
+  return 1000 - (res?._sum?.credits?.toNumber() || 0);
 }
 
 function creditsToString(credits: number): string {
