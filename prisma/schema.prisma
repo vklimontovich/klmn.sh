@@ -85,7 +85,7 @@ model EmailForwarding {
   telegramUserId String
   forwardTo String
   confirmed DateTime?
-  secret String?
+  secret String
   confirmationCode String?
 }
 

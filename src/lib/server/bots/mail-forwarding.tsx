@@ -169,6 +169,7 @@ export const handleEmailForwardingMessage: MessageHandler = async ({
           data: {
             telegramUserId: msg.from?.id + "",
             forwardTo: email,
+            secret: Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15),
             confirmationCode: confirmationCode,
           },
         });
