@@ -3,6 +3,7 @@ import TelegramBot, { Chat, Message, User } from "node-telegram-bot-api";
 import { prisma } from "@/lib/server/prisma";
 import { resend } from "@/lib/server/email";
 import assert from "node:assert";
+import { EmailForwarding } from "@prisma/client";
 import { render } from "@react-email/render";
 import { Hr, Html } from "@react-email/components";
 
@@ -111,6 +112,21 @@ async function toAttachment(
   return { filename, secret };
 }
 
+async function getForwardingEmail(telegramUserId: string): Promise<EmailForwarding | undefined> {
+  const configuredEmails = (await prisma.emailForwarding.findMany({ where: { telegramUserId } }));
+  if (!configuredEmails || configuredEmails.length === 0) {
+    return undefined;
+  }
+  let lastConfigured = configuredEmails[0];
+  for (const configured of configuredEmails) {
+    if (configured.createdAt.getTime() > lastConfigured.createdAt.getTime()) {
+      lastConfigured = configured;
+    }
+  }
+  return lastConfigured;
+
+}
+
 export const handleEmailForwardingMessage: MessageHandler = async ({
   msg,
   client,
@@ -135,7 +151,7 @@ export const handleEmailForwardingMessage: MessageHandler = async ({
       await client.sendMessage(msg.chat.id, `<b>🚀I understand following commands </b>\n\n${helpMessage}\n\nHappy forwarding!`, { parse_mode: "HTML" });
       return;
     } else if (command?.trim() === "status") {
-      const currentStatus = await prisma.emailForwarding.findFirst({ where: { telegramUserId: msg.from?.id + "" } });
+      const currentStatus = await getForwardingEmail(msg.from?.id + "");
       if (!currentStatus) {
         await client.sendMessage(
           msg.chat.id,
@@ -205,7 +221,7 @@ export const handleEmailForwardingMessage: MessageHandler = async ({
         { parse_mode: "HTML" }
       );
     } else {
-      const forwarding = await prisma.emailForwarding.findFirst({ where: { telegramUserId: msg.from?.id + "" } });
+      const forwarding = await getForwardingEmail(msg.from?.id + "");
       if (!forwarding) {
         await client.sendMessage(
           msg.chat.id,
