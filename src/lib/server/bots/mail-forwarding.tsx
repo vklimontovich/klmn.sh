@@ -40,9 +40,10 @@ function telegramJsonToHtml(messageJson: Message) {
   // Replace newline characters with HTML line breaks
   htmlContent = escapeHtml(htmlContent);
 
-  // Sort entities in reverse order to avoid messing up the indices
-  if (messageJson.entities) {
-    const entities = messageJson.entities.sort((a, b) => b.offset - a.offset);
+  const rawEntities = messageJson.entities || messageJson.caption_entities;
+  if (rawEntities) {
+    // Sort entities in reverse order to avoid messing up the indices
+    const entities = rawEntities.sort((a, b) => b.offset - a.offset);
 
     // Apply each entity
     for (let entity of entities) {
