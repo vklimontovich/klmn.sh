@@ -1,4 +1,4 @@
-import { MessageEntity, ParseMode } from "node-telegram-bot-api";
+import { Message, MessageEntity, ParseMode } from "node-telegram-bot-api";
 
 import { parse } from "@textlint/markdown-to-ast";
 import { TxtDocumentNode, TxtImageNode } from "@textlint/ast-node-types";
@@ -27,9 +27,12 @@ function offsetPosition(childParsed: ParserRes, number: number) {
 type GlobalParsingContext = {
   depth: number;
   imgCounter: number;
-}
+};
 
-function parseNode(node: TxtDocumentNode | Content, ctx: GlobalParsingContext = {depth: 0, imgCounter: 0}): ParserRes {
+function parseNode(
+  node: TxtDocumentNode | Content,
+  ctx: GlobalParsingContext = { depth: 0, imgCounter: 0 }
+): ParserRes {
   let children = (node as any).children || [];
   let type = node.type;
 
@@ -52,7 +55,7 @@ function parseNode(node: TxtDocumentNode | Content, ctx: GlobalParsingContext = 
       text,
       entities: [
         { type: "Link", len: text.length, offset: 0, originalNode: node },
-        { type: "Strong", len: text.length, offset: 0, originalNode: node }
+        { type: "Strong", len: text.length, offset: 0, originalNode: node },
       ],
     };
   }
@@ -62,7 +65,7 @@ function parseNode(node: TxtDocumentNode | Content, ctx: GlobalParsingContext = 
   let offset = 0;
 
   for (const child of children) {
-    const childConverted = parseNode(child, {...ctx, depth: ctx.depth + 1});
+    const childConverted = parseNode(child, { ...ctx, depth: ctx.depth + 1 });
     const text = childConverted.text;
     childText.push(text);
     offsetPosition(childConverted, offset);
@@ -81,8 +84,7 @@ function parseNode(node: TxtDocumentNode | Content, ctx: GlobalParsingContext = 
   }
   if (type === "CodeBlock") {
     text = text + "\n\n";
-    lenCorrection = -2
-
+    lenCorrection = -2;
   }
 
   return {
@@ -164,12 +166,113 @@ export function appendLoadingIndicator(m: TelegramFormattedMessage): TelegramFor
   } else {
     const postfix = `Still thinking... 🤔`;
     return {
-      text:  `${m.text}\n\n${postfix}`,
-      entities: [...(m.entities || []), {
-        type: "italic",
-        offset: m.text.length + 2,
-        length: postfix.length,
-      }],
+      text: `${m.text}\n\n${postfix}`,
+      entities: [
+        ...(m.entities || []),
+        {
+          type: "italic",
+          offset: m.text.length + 2,
+          length: postfix.length,
+        },
+      ],
     };
   }
+}
+
+export function telegramJsonToHtml(
+  messageJson: Pick<Message, "text" | "caption" | "entities" | "caption_entities">
+): string {
+  function escapeHtml(text: string) {
+    return text
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;")
+      .replace(/\n/g, "<br />");
+  }
+
+  let htmlContent = messageJson.text || messageJson.caption || "The message contains no content";
+
+  const replacementTable: Record<string, string> = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;",
+    "\n": "<br />",
+  };
+
+  const rawEntities = messageJson.entities || messageJson.caption_entities || [];
+  let _newContent = "";
+
+  function offset(entities: MessageEntity[], fromPos: number, delta: number) {
+    for (let entity of entities) {
+      if (entity.offset >= fromPos) {
+        entity.offset += delta;
+      }
+    }
+  }
+
+  for (let idx = 0; idx < htmlContent.length; idx++) {
+    const char = htmlContent[idx];
+    if (replacementTable[char]) {
+      _newContent += replacementTable[char];
+      offset(rawEntities, idx, replacementTable[char].length - 1);
+    }
+  }
+
+  // Sort entities in reverse order to avoid messing up the indices
+  const entities = rawEntities.sort((a, b) => b.offset - a.offset);
+
+  htmlContent = escapeHtml(htmlContent);
+  type Insertion = {
+    position: number;
+    insert: string;
+    priority: number;
+  };
+  const insertions: Insertion[] = [];
+  // Apply each entity
+  for (let entity of entities) {
+    const start = entity.offset;
+    const end = start + entity.length;
+
+    switch (entity.type) {
+      case "bold":
+        insertions.push({ position: start, insert: "<b>", priority: 1 });
+        insertions.push({ position: end, insert: "</b>", priority: -1 });
+        break;
+      case "italic":
+        insertions.push({ position: start, insert: "<i>", priority: 2 });
+        insertions.push({ position: end, insert: "</i>", priority: -2 });
+        break;
+      case "code":
+        insertions.push({ position: start, insert: "<pre><code>", priority: 3 });
+        insertions.push({ position: end, insert: "</code></pre>", priority: -3 });
+        break;
+      case "url":
+        insertions.push({ position: start, insert: `<a href="${entity.url}">`, priority: 4 });
+        insertions.push({ position: end, insert: `</a>`, priority: -4 });
+        break;
+      case "text_link":
+        insertions.push({ position: start, insert: `<a href="${entity.url}">`, priority: 5 });
+        insertions.push({ position: end, insert: `</a>`, priority: -5 });
+        break;
+    }
+    // Replace newline characters with HTML line breaks
+  }
+  insertions.sort((a, b) => {
+    const res = a.position - b.position;
+    return res === 0 ? a.priority - b.priority : res;
+  });
+  console.log(insertions);
+  const newContent: string[] = [];
+
+  let pos = 0;
+  for (let insertion of insertions) {
+    newContent.push(htmlContent.slice(pos, insertion.position));
+    newContent.push(insertion.insert);
+    pos = insertion.position;
+  }
+  return newContent.join("");
 }

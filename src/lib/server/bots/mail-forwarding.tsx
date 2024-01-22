@@ -6,6 +6,7 @@ import assert from "node:assert";
 import { EmailForwarding } from "@prisma/client";
 import { render } from "@react-email/render";
 import { Hr, Html } from "@react-email/components";
+import { telegramJsonToHtml } from "@/lib/server/telegram/format";
 
 export const helpMessage = `/help - display help
 /status - display current settings of your email forwarding
@@ -21,62 +22,6 @@ I'm the email forwarding bot. I can forward telegram messages to email.
 To get started, use one of the following commands:
 
 ${helpMessage.trim()}`;
-
-
-function escapeHtml(text: string) {
-  return text
-
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;")
-    .replace(/\n/g, "<br />");
-}
-
-function telegramJsonToHtml(messageJson: Message) {
-  let htmlContent = messageJson.text || messageJson.caption || "The message contains no content";
-
-  // Replace newline characters with HTML line breaks
-  htmlContent = escapeHtml(htmlContent);
-
-  const rawEntities = messageJson.entities || messageJson.caption_entities;
-  if (rawEntities) {
-    // Sort entities in reverse order to avoid messing up the indices
-    const entities = rawEntities.sort((a, b) => b.offset - a.offset);
-
-    // Apply each entity
-    for (let entity of entities) {
-      const start = entity.offset;
-      const end = start + entity.length;
-      const text = htmlContent.substring(start, end);
-
-      switch (entity.type) {
-        case "bold":
-          htmlContent = replaceRange(htmlContent, start, end, `<b>${text}</b>`);
-          break;
-        case "italic":
-          htmlContent = replaceRange(htmlContent, start, end, `<i>${text}</i>`);
-          break;
-        case "code":
-          htmlContent = replaceRange(htmlContent, start, end, `<pre><code>${text}</code></pre>`);
-          break;
-        case "url":
-          htmlContent = replaceRange(htmlContent, start, end, `<a href="${entity.url}">${text}</a>`);
-          break;
-        case "text_link":
-          htmlContent = replaceRange(htmlContent, start, end, `<a href="${entity.url}">${text}</a>`);
-          break;
-      }
-    }
-  }
-
-  return htmlContent;
-}
-
-function replaceRange(s: string, start: number, end: number, substitute: string) {
-  return s.substring(0, start) + substitute + s.substring(end);
-}
 
 function getName(user?: User | Chat): string | undefined {
   if (!user) {
@@ -119,7 +64,7 @@ async function toAttachment(
 }
 
 async function getForwardingEmail(telegramUserId: string): Promise<EmailForwarding | undefined> {
-  const configuredEmails = (await prisma.emailForwarding.findMany({ where: { telegramUserId } }));
+  const configuredEmails = await prisma.emailForwarding.findMany({ where: { telegramUserId } });
   if (!configuredEmails || configuredEmails.length === 0) {
     return undefined;
   }
@@ -130,18 +75,12 @@ async function getForwardingEmail(telegramUserId: string): Promise<EmailForwardi
     }
   }
   return lastConfigured;
-
 }
 
-export const handleEmailForwardingMessage: MessageHandler = async ({
-  msg,
-  client,
-  appHost,
-  botHandle,
-}) => {
+export const handleEmailForwardingMessage: MessageHandler = async ({ msg, client, appHost, botHandle }) => {
   const userName = getName(msg.from) || "there";
   const forwardedFrom = getName(msg.forward_from) || getName(msg.forward_from_chat) || getName(msg.from) || "unknown";
-  const {command} = getCommand(msg);
+  const { command } = getCommand(msg);
   try {
     if (command === "start") {
       const welcomeMessageText = welcomeMessage({
@@ -152,7 +91,11 @@ export const handleEmailForwardingMessage: MessageHandler = async ({
       return;
     }
     if (command?.trim() === "help") {
-      await client.sendMessage(msg.chat.id, `<b>🚀I understand following commands </b>\n\n${helpMessage}\n\nHappy forwarding!`, { parse_mode: "HTML" });
+      await client.sendMessage(
+        msg.chat.id,
+        `<b>🚀I understand following commands </b>\n\n${helpMessage}\n\nHappy forwarding!`,
+        { parse_mode: "HTML" }
+      );
       return;
     } else if (command?.trim() === "status") {
       const currentStatus = await getForwardingEmail(msg.from?.id + "");
@@ -294,7 +237,9 @@ export const handleEmailForwardingMessage: MessageHandler = async ({
           "X-Entity-Ref-ID": Math.random().toString(36).substring(2, 15),
         },
       });
-      await client.sendMessage(msg.chat.id, `📧Your message has been forwarded to <b>${email}</b>!`, { parse_mode: "HTML" });
+      await client.sendMessage(msg.chat.id, `📧Your message has been forwarded to <b>${email}</b>!`, {
+        parse_mode: "HTML",
+      });
     }
   } catch (e: any) {
     console.error(`Error processing request`, e);
