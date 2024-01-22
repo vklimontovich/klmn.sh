@@ -60,7 +60,12 @@ function telegramJsonToHtml(messageJson: Message) {
         case "code":
           htmlContent = replaceRange(htmlContent, start, end, `<pre><code>${text}</code></pre>`);
           break;
-        // Add other cases as needed
+        case "url":
+          htmlContent = replaceRange(htmlContent, start, end, `<a href="${entity.url}">${text}</a>`);
+          break;
+        case "text_link":
+          htmlContent = replaceRange(htmlContent, start, end, `<a href="${entity.url}">${text}</a>`);
+          break;
       }
     }
   }
@@ -130,8 +135,6 @@ async function getForwardingEmail(telegramUserId: string): Promise<EmailForwardi
 export const handleEmailForwardingMessage: MessageHandler = async ({
   msg,
   client,
-  isNewUser,
-  botToken,
   appHost,
   botHandle,
 }) => {
