@@ -258,6 +258,14 @@ export function telegramJsonToHtml(
         insertions.push({ position: start, insert: `<a href="${entity.url}">`, priority: 5 });
         insertions.push({ position: end, insert: `</a>`, priority: -5 });
         break;
+      case "mention":
+        insertions.push({ position: start, insert: ``, priority: 6 });
+        insertions.push({ position: end, insert: ``, priority: -6 });
+        break;
+
+      default:
+        insertions.push({ position: start, insert: ``, priority: 7 });
+        insertions.push({ position: end, insert: ``, priority: -7 });
     }
     // Replace newline characters with HTML line breaks
   }
@@ -274,5 +282,6 @@ export function telegramJsonToHtml(
     newContent.push(insertion.insert);
     pos = insertion.position;
   }
+  newContent.push(htmlContent.slice(pos));
   return newContent.join("");
 }

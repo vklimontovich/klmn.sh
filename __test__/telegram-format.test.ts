@@ -33,7 +33,7 @@ test("markdown-to-telegram", async () => {
 
 test("telegram-to-html", () => {
   const msg1 = {
-    text: "Test > boldLink > test",
+    text: "Test > boldLink > test test2",
     entities: [
       {
         offset: 7,
@@ -55,7 +55,7 @@ test("telegram-to-html", () => {
   } as any;
 
   const html1 = telegramJsonToHtml(msg1);
-  expect(html1).toBe('Test &gt; <b><a href="https://google.com/">boldLink</a></b> &gt; <i>test</i>');
+  expect(html1).toBe('Test &gt; <b><a href="https://google.com/">boldLink</a></b> &gt; <i>test</i> test2');
   console.log("Message has been formatted as HTML: ", html1);
 
   const msg2 = {
@@ -80,6 +80,21 @@ test("telegram-to-html", () => {
   } as any;
 
   const html2 = telegramJsonToHtml(msg2);
-  expect(html2).toBe('"&amp;<b><i>d</i></b> <pre><code>test</code></pre>');
+  expect(html2).toBe('&amp;<b><i>d</i></b> <pre><code>test</code></pre>');
   console.log("Message has been formatted as HTML: ", html2);
+
+  const msg3 = {
+    text: "@callmeshura test test test",
+    entities: [
+      {
+        offset: 0,
+        length: 12,
+        type: "mention",
+      },
+    ],
+  } as any;
+  const html3 = telegramJsonToHtml(msg3);
+  console.log("Message has been formatted as HTML: ", html3);
+  expect(html3).toBe('@callmeshura test test test');
+
 });
