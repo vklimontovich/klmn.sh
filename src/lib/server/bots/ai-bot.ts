@@ -284,7 +284,7 @@ async function handlePrompt(ctx: MessageContext, msg: { text?: string }, bot: Te
           await bot.sendMessage(
             chatId,
             [
-              `🤖 <code> Prompt stat: model={model}, output=${outputTokens}, input=${intputTokens}</code>`,
+              `🤖 <code> Prompt stat: model=${model}, output=${outputTokens}, input=${intputTokens}</code>`,
               `<code>outputCredits=${format(outputCredits)}, inputCredits=${format(
                 inputCredits
               )}, totalCredits=${format(inputCredits + outputCredits)}</code>`,
