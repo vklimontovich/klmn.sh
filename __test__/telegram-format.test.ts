@@ -29,6 +29,12 @@ test("markdown-to-telegram", async () => {
   //const bold = markdownToTelegram(getTestCase("bold.md"));
   //console.log(bold);
   await testMarkdown(getTestCase("case2.md"), bot);
+  const msg4 = {
+    text: 'Here is a formula you can use in Google Sheets to calculate the USD to RUB exchange rate for a given date:\n\n```\n=GOOGLEFINANCE("CURRENCY:USDRUB", "price", DATE(year, month, day))\n```\n\nWhere:\n\n- `YEAR` is the 4-digit year for the date you want the exchange rate for \n- `MONTH` is the month number (1-12)\n- `DAY` is the day of the month\n\nFor example, to get the USD to RUB exchange rate for January 1st, 2023, you would use:\n\n```\n=GOOGLEFINANCE("CURRENCY:USDRUB", "price", DATE(2023, 1, 1))\n```\n\nThis fetches the historical exchange rate for that currency pair on that exact date from Google Finance.\n\nYou can then use that returned exchange rate in further calculations to convert USD values to RUB.\n\nSo it allows you to lookup historical exchange rates directly in Google Sheets using the GOOGLEFINANCE function.',
+  };
+  const markdown = markdownToTelegram(msg4.text);
+  console.log(markdown);
+  await testMarkdown(msg4.text, bot);
 });
 
 test("telegram-to-html", () => {
@@ -96,5 +102,6 @@ test("telegram-to-html", () => {
   const html3 = telegramJsonToHtml(msg3);
   console.log("Message has been formatted as HTML: ", html3);
   expect(html3).toBe('@callmeshura test test test');
+
 
 });

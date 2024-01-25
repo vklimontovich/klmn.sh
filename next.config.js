@@ -1,17 +1,18 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   productionBrowserSourceMaps: true,
-  options: {
-    sourcemaps: 'production'
-  },
-  // webpack(config, { isServer, dev }) {
-  //   config.experiments = {
-  //     asyncWebAssembly: true,
-  //     layers: true,
-  //   };
-  //
-  //   return config;
-  // },
+
+  webpack: (config, { isServer, dev }) => {
+    if (!dev) {
+      config.devtool = 'source-map';
+
+      // For the server code, Next.js doesn't generate source maps by default. Enable them if needed:
+      if (isServer) {
+        config.devtool = 'source-map';
+      }
+    }
+    return config;
+  }
 }
 
 module.exports = nextConfig
