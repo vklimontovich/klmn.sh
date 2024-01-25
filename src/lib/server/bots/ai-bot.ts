@@ -15,6 +15,7 @@ import { applicationHost } from "@/lib/server/app-base";
 
 import jwt from "jsonwebtoken";
 import { billing, creditsToString, getCostByUser } from "@/lib/server/billing";
+import { log } from "@/lib/server/log";
 
 dayjs.extend(relativeTime);
 
@@ -267,6 +268,7 @@ async function handlePrompt(ctx: MessageContext, msg: { text?: string }, bot: Te
               parse_mode: "HTML",
             }
           );
+          await log("telegram:error:message-format", {raw: completion, msg: e?.message, stack: e?.stack});
         }
         if (ctx.userSettings.verbose) {
           function format(price: number) {
@@ -282,8 +284,7 @@ async function handlePrompt(ctx: MessageContext, msg: { text?: string }, bot: Te
           await bot.sendMessage(
             chatId,
             [
-              `🤖 Prompt stat:\n`,
-              `<code>output=${outputTokens}, input=${intputTokens}</code>`,
+              `🤖 <code> Prompt stat: model={model}, output=${outputTokens}, input=${intputTokens}</code>`,
               `<code>outputCredits=${format(outputCredits)}, inputCredits=${format(
                 inputCredits
               )}, totalCredits=${format(inputCredits + outputCredits)}</code>`,
