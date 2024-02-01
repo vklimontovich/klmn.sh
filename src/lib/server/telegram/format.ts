@@ -236,6 +236,7 @@ export function telegramJsonToHtml(
   for (let entity of entities) {
     const start = entity.offset;
     const end = start + entity.length;
+    const text = htmlContent.slice(start, end);
 
     switch (entity.type) {
       case "bold":
@@ -251,7 +252,7 @@ export function telegramJsonToHtml(
         insertions.push({ position: end, insert: "</code></pre>", priority: -3 });
         break;
       case "url":
-        insertions.push({ position: start, insert: `<a href="${entity.url}">`, priority: 4 });
+        insertions.push({ position: start, insert: `<a href="${text}">`, priority: 4 });
         insertions.push({ position: end, insert: `</a>`, priority: -4 });
         break;
       case "text_link":

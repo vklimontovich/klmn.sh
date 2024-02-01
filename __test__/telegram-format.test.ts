@@ -103,5 +103,22 @@ test("telegram-to-html", () => {
   console.log("Message has been formatted as HTML: ", html3);
   expect(html3).toBe('@callmeshura test test test');
 
+  const msg4 = {
+    "text": "Most modern browsers use the Happy Eyeballs algorithm; they try all addresses at once and stick with the one which replies fastest. This is implemented entirely within the app and cannot be influenced by the OS. (Note that the algorithm is sometimes tweaked to give a head start to IPv6 or IPv4 in case they both give similar results.)\n\nOlder browsers and many other programs try all addresses one by one, sorted according to a default address selection algorithm, which usually prefers native IPv6 over native IPv4 over automatic v6 tunnels. This ordering is usually implemented in the OS (e.g. gai.conf), and programs don't sort addresses manually.\nhttps://superuser.com/questions/1199129/how-web-browser-determines-when-to-use-ipv4-or-ipv6-to-connect-to-the-destinatio",
+    "entities": [
+      {
+        "offset": 651,
+        "length": 120,
+        "type": "url"
+      }
+    ],
+    "link_preview_options": {
+      "url": "https://superuser.com/questions/1199129/how-web-browser-determines-when-to-use-ipv4-or-ipv6-to-connect-to-the-destinatio"
+    }
+  } as any;
+
+  const html4 = telegramJsonToHtml(msg4);
+  console.log("Message has been formatted as HTML: ", html4);
+
 
 });
