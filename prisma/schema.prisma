@@ -6,95 +6,108 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_DIRECT_URL")
 }
 
 model Log {
-  id        String      @default(uuid()) @id
-  timestamp DateTime    @default(now())
+  id        String   @id @default(uuid())
+  timestamp DateTime @default(now())
   namespace String
   body      Json
 }
 
 model TextMessageRoute {
-  id        String      @default(uuid()) @id
-  createdAt DateTime    @default(now())
-  source	String
-  type      String
+  id          String   @id @default(uuid())
+  createdAt   DateTime @default(now())
+  source      String
+  type        String
   destination String
 }
 
 model TelegramContacts {
-  id        String      @default(uuid()) @id
-  createdAt DateTime    @default(now())
-  botHandle    String?
-  botId String?
+  id        String        @id @default(uuid())
+  createdAt DateTime      @default(now())
+  botHandle String?
+  botId     String?
   bot       TelegramBots? @relation(fields: [botId], references: [id])
-  chatId	String
+  chatId    String
   userId    String
   userName  String?
 }
 
 model TelegramBots {
-   id 	  String      @default(uuid()) @id
-   createdAt  DateTime    @default(now())
-   botHandle    String?
-   webhookSecret String
-   botToken   String
+  id            String   @id @default(uuid())
+  createdAt     DateTime @default(now())
+  botHandle     String?
+  webhookSecret String
+  botToken      String
 
-   messages TelegramMessages[]
-   contacts TelegramContacts[]
-   attachments Attachment[]
+  messages    TelegramMessages[]
+  contacts    TelegramContacts[]
+  attachments Attachment[]
 }
 
-
 model RssExport {
-  id           String      @default(uuid()) @id
-  createdAt    DateTime    @default(now())
-  rssUrl	           String
-  telegramChannelName  String
-  lastSignature 	   String?
-  lastUpdateAt DateTime?
-  RssItem      RssItem[]
+  id                  String    @id @default(uuid())
+  createdAt           DateTime  @default(now())
+  rssUrl              String
+  telegramChannelName String
+  lastSignature       String?
+  lastUpdateAt        DateTime?
+  RssItem             RssItem[]
 }
 
 model RssItem {
-  id               String      @default(uuid()) @id
-  createdAt    	   DateTime    @default(now())
+  id               String    @id @default(uuid())
+  createdAt        DateTime  @default(now())
   channelMessageId String
-  guid			   String
+  guid             String
   signature        String?
-  rssExportId  String
-  rssExport    RssExport   @relation(fields: [rssExportId], references: [id])
+  rssExportId      String
+  rssExport        RssExport @relation(fields: [rssExportId], references: [id])
 }
 
 model TaskQueue {
-  id        String      @default(uuid()) @id
-  createdAt DateTime    @default(now())
+  id          String    @id @default(uuid())
+  createdAt   DateTime  @default(now())
   completedAt DateTime?
-  error String?
-  key String?
-  task Json
+  error       String?
+  key         String?
+  task        Json
 }
 
 model EmailForwarding {
-  id		String      @default(uuid()) @id
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
-  telegramUserId String
-  forwardTo String
-  confirmed DateTime?
-  secret String
+  id               String    @id @default(uuid())
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  telegramUserId   String
+  forwardTo        String
+  confirmed        DateTime?
+  secret           String
   confirmationCode String?
 }
 
-model Attachment {
-  id		String      @default(uuid()) @id
-  updatedAt DateTime    @updatedAt
-  filename String?
+model BlockedEmails {
+  id        String    @id @default(uuid())
+  email     String
+  blockedAt DateTime? @default(now())
+}
 
-  botId String?
+model EmailForwardingStat {
+  id             String   @id @default(uuid())
+  email          String
+  dayStart       DateTime
+  forwardedCount Int
+}
+
+model Attachment {
+  id        String   @id @default(uuid())
+  updatedAt DateTime @updatedAt
+  filename  String?
+
+  botId     String?
   bot       TelegramBots? @relation(fields: [botId], references: [id])
   botHandle String
 
@@ -103,64 +116,62 @@ model Attachment {
 }
 
 model AiChatSessions {
-	id		String      @default(uuid()) @id
-	createdAt DateTime    @default(now())
-	updatedAt DateTime    @updatedAt
-	closedAt DateTime?
-	telegramUserId String
-	chatMessage AiChatMessage[]
+  id             String          @id @default(uuid())
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  closedAt       DateTime?
+  telegramUserId String
+  chatMessage    AiChatMessage[]
 }
 
-
 model AiChatMessage {
-	id		String      @default(uuid()) @id
-	createdAt DateTime    @default(now())
-	updatedAt DateTime    @updatedAt
-	sessionId String
-	session AiChatSessions @relation(fields: [sessionId], references: [id])
-	message Json
-	telegramMessageId String?
-	telegramMessage TelegramMessages? @relation(fields: [telegramMessageId], references: [id])
+  id                String            @id @default(uuid())
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  sessionId         String
+  session           AiChatSessions    @relation(fields: [sessionId], references: [id])
+  message           Json
+  telegramMessageId String?
+  telegramMessage   TelegramMessages? @relation(fields: [telegramMessageId], references: [id])
 }
 
 model AiCostsTransactions {
-	id		String      @default(uuid()) @id
-	timestamp DateTime    @default(now())
-	telegramUserId String
-	sessionId String?
-	tokens Int?
-	model String?
-	type String
-	credits Decimal
+  id             String   @id @default(uuid())
+  timestamp      DateTime @default(now())
+  telegramUserId String
+  sessionId      String?
+  tokens         Int?
+  model          String?
+  type           String
+  credits        Decimal
 }
 
 model TelegramMessages {
-	id		String      @default(uuid()) @id
-	createdAt DateTime    @default(now())
-    botId String
-    bot       TelegramBots @relation(fields: [botId], references: [id])
-	botHandle String
-	messageId String
-	telegramUserId String
-	payload Json
-	mediaGroupId String?
-	chatMessage AiChatMessage[]
+  id             String          @id @default(uuid())
+  createdAt      DateTime        @default(now())
+  botId          String
+  bot            TelegramBots    @relation(fields: [botId], references: [id])
+  botHandle      String
+  messageId      String
+  telegramUserId String
+  payload        Json
+  mediaGroupId   String?
+  chatMessage    AiChatMessage[]
 }
 
 model AiChatSettings {
-	id		String      @default(uuid()) @id
-	createdAt DateTime    @default(now())
-	updatedAt DateTime    @updatedAt
-	telegramUserId String
-	settings Json?
+  id             String   @id @default(uuid())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  telegramUserId String
+  settings       Json?
 }
 
 model AiChatState {
-	id	String      @default(uuid()) @id
-	createdAt DateTime    @default(now())
-	updatedAt DateTime    @updatedAt
-	deleteAt DateTime?
-	telegramUserId String
-	state Json?
+  id             String    @id @default(uuid())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deleteAt       DateTime?
+  telegramUserId String
+  state          Json?
 }
-
