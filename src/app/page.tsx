@@ -91,7 +91,7 @@ export default function Home() {
           <InlineHighlight>v@klmn.io</InlineHighlight>
         </p>
         I maintain some social media presence:{" "}
-        <InlineHighlight href="https://twitter.com/vklimontovich" icon={<TwitterLogo />}>
+        <InlineHighlight href="https://twitter.com/vl_klmn" icon={<TwitterLogo />}>
           vl_klmn
         </InlineHighlight>
         ,{" "}
