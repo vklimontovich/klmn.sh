@@ -5,7 +5,7 @@ import headshot from "@/assets/headshot.jpg";
 
 export default function EssaysLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="py-12 mx-auto px-4" style={{ maxWidth: "1000px", minHeight: "100vh" }}>
+    <div className="py-12 mx-auto px-4" style={{ maxWidth: "740px", minHeight: "100vh" }}>
       <div className="flex justify-between items-center">
         <div className="text-2xl">
           <Link href={"/"} className={`font-extrabold text-blue-600 ${monoFont.className}`}>
