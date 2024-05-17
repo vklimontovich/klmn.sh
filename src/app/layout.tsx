@@ -1,11 +1,8 @@
 import type { Metadata } from "next";
-import { Inter, Quantico } from "next/font/google";
 import "./globals.css";
 import { NextCollectProvider } from "next-collect/client";
+import { headerFont, mainFont } from "@/app/fonts";
 
-const headerFont = Quantico({ subsets: ["latin"], weight: ["400", "700"], variable: "--font-header" });
-const mainFont = Inter({ subsets: ["latin"], variable: "--font-main" });
-//const monoFont = Inter({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
   title: "Vladimir Klimontovich",

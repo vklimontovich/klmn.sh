@@ -17,6 +17,8 @@ import { TextPage } from "@/components/text-page";
 import { Mail, MapPin } from "lucide-react";
 import { ReactNode } from "react";
 import clsx from "clsx";
+import { essays } from "@/content";
+import { EssaysList } from "@/components/essays-list";
 
 const AvatarLink: React.FC<{ href?: string; className?: string; children: ReactNode; icon: ReactNode }> = ({
   href,
@@ -137,6 +139,11 @@ export default function Home() {
           I co-founded GetIntent in 2013 and was a CTO, and later COO until 2018 when I left. The company was acquired
           in 2019.
         </p>
+        <Header id="essays" level="h2">
+          Essays
+        </Header>
+        <p>Sometimes I write about startups, and other things:</p>
+        <EssaysList className="mt-2" essays={essays} />
       </TextPage>
     </main>
   );

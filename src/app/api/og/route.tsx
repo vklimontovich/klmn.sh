@@ -2,10 +2,11 @@ import { ImageResponse } from "@vercel/og";
 import React from "react";
 
 import { headshotPng } from "@/lib/headshot";
+import { NextRequest } from "next/server";
 
 export const runtime = "edge";
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   return new ImageResponse(
     (
       <div tw="flex flex-col relative">
