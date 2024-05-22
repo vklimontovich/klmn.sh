@@ -27,6 +27,7 @@ export const essays: Essay[] = [
     slug: "monthly-vs-annual",
     title: "Should I sell my SaaS-subscription be monthly or annually?",
     soon: true,
+    notionId: "488731272a364f6d85ccf11e0c533ca9",
     subtitle: "When it makes sense to offer annual plans and when it doesn't",
     date: new Date("2024-05-12"),
   },
@@ -42,6 +43,13 @@ export const essays: Essay[] = [
     title: "Pivots are bad for startup industry",
     soon: true,
     subtitle: "How startups get infected with pivotitus and what are the consequences",
+    date: new Date("2024-05-12"),
+  },
+  {
+    slug: "ai-antihype",
+    title: "AI Anti-hype",
+    soon: true,
+    subtitle: "What is going to happen with AI startups after the hype is over",
     date: new Date("2024-05-12"),
   },
 ];
