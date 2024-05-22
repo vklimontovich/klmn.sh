@@ -26,7 +26,6 @@ export const essays: Essay[] = [
   {
     slug: "monthly-vs-annual",
     title: "Should I sell my SaaS-subscription be monthly or annually?",
-    soon: true,
     notionId: "488731272a364f6d85ccf11e0c533ca9",
     subtitle: "When it makes sense to offer annual plans and when it doesn't",
     date: new Date("2024-05-12"),
