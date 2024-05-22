@@ -30,6 +30,20 @@ export const essays: Essay[] = [
     subtitle: "When it makes sense to offer annual plans and when it doesn't",
     date: new Date("2024-05-12"),
   },
+  {
+    slug: "russian-runway",
+    title: "How much of the \"runway\" Russia has left?",
+    soon: true,
+    subtitle: "For how long Russia can wage a war in Ukraine before running out of money",
+    date: new Date("2024-05-12"),
+  },
+  {
+    slug: "pivotitus",
+    title: "Pivots are bad for startup industry",
+    soon: true,
+    subtitle: "How startups get infected with pivotitus and what are the consequences",
+    date: new Date("2024-05-12"),
+  },
 ];
 
 /**
