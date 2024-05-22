@@ -10,6 +10,13 @@ export type Essay = {
 
 export const essays: Essay[] = [
   {
+    slug: "monthly-vs-annual",
+    title: "Should I sell my SaaS-subscription be monthly or annually?",
+    notionId: "488731272a364f6d85ccf11e0c533ca9",
+    subtitle: "When it makes sense to offer annual plans and when it doesn't",
+    date: new Date("2024-05-12"),
+  },
+  {
     slug: "selling-to-startups",
     notionId: "2ceed377d2c94c3aacba38e234ab1799",
     title: "The Hidden Challenges of Selling to Startups",
@@ -21,13 +28,6 @@ export const essays: Essay[] = [
     title: "Will my favorite open-source last?",
     soon: true,
     subtitle: "The harsh reality of commercial open-source projects cycle",
-    date: new Date("2024-05-12"),
-  },
-  {
-    slug: "monthly-vs-annual",
-    title: "Should I sell my SaaS-subscription be monthly or annually?",
-    notionId: "488731272a364f6d85ccf11e0c533ca9",
-    subtitle: "When it makes sense to offer annual plans and when it doesn't",
     date: new Date("2024-05-12"),
   },
   {
