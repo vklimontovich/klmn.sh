@@ -1,4 +1,10 @@
 import { TextPage } from "@/components/text-page";
+export const metadata = {
+  robots: {
+    index: false,
+    follow: false, // Optional: Disallow following links on the page
+  },
+};
 
 export default function ConsultingPage() {
   return (
