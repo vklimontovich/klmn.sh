@@ -35,7 +35,6 @@
     "next-collect": "beta",
     "node-telegram-bot-api": "^0.64.0",
     "notion-client": "^6.16.0",
-    "notion-types": "^7.1.6",
     "openai": "^4.24.6",
     "react": "^18",
     "react-dom": "^18",
