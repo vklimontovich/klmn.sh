@@ -95,6 +95,14 @@ export const handleEmailForwardingMessage: MessageHandler = async ({
   appHost,
   botHandle,
 }) => {
+  if (msg.chat.type !== "private") {
+    await client.sendMessage(
+      msg.chat.id,
+      `Mail forwarding bot works only in private chats. Please, don't add me to groups or channels.`,
+      { parse_mode: "HTML" },
+    )
+    return;
+  }
   const userName = getName(msg.from) || "there";
   const forwardedFrom =
     getName(msg.forward_from) ||
