@@ -72,7 +72,7 @@ export const cvCopy: Record<string, CvCopy> = {
         </>,
         <>
           <b>AI:</b> Deep expertise in LLM internals and production AI agents. Built multiple <Kw>MCP</Kw> servers and agent
-          systems from scratch
+          systems and RAG-pipelines
         </>,
         <>
           <b>Product Leadership:</b> Founded two profitable B2B SaaS companies—one <Kw>YC</Kw>-backed, one scaled to{" "}

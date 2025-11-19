@@ -1,6 +1,6 @@
 import { CVPage } from "@/components/CVPage";
-import { Metadata } from "next";
 import { cvCopy } from "@/content/cv";
+import { Metadata } from "next";
 
 const copy = cvCopy.default;
 
@@ -15,6 +15,7 @@ export const metadata: Metadata = {
     title: `${copy.name} - CV`,
     description: copy.shortDescription,
     type: "profile",
+    images: ["/api/og/cv"],
   },
   twitter: {
     card: "summary_large_image",

@@ -136,11 +136,11 @@ export function CVPage() {
             </div>
           </div>
 
-          <section className="mb-6">
+          <section className={`mb-6 ${styles.introSection}`}>
             <p className="text-gray-700 leading-relaxed">{copy.intro}</p>
           </section>
 
-          <section className="mb-6">
+          <section className={`mb-6 ${styles.expertiseSection}`}>
             <h2>Professional Focus &amp; Expertise</h2>
             <hr/>
             <ul className="space-y-1 mt-0">
