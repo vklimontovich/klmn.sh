@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { NextCollectProvider } from "next-collect/client";
 import { headerFont, mainFont } from "@/app/fonts";
+import { PageViewAnalytics } from "@/components/PageViewAnalytics";
 
 
 export const metadata: Metadata = {
@@ -17,16 +17,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className={`${headerFont.variable} ${mainFont.variable}`}>
-        <NextCollectProvider
-          tags={[
-            process.env.NEXT_PUBLIC_GA4 && {
-              type: "ga4",
-              opts: { debug: true, containerId: process.env.NEXT_PUBLIC_GA4 },
-            },
-          ]}
-        >
-          {children}
-        </NextCollectProvider>
+        <PageViewAnalytics />
+        {children}
       </body>
     </html>
   );

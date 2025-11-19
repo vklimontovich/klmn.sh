@@ -3,7 +3,7 @@ import { Briefcase, CodeXml, MonitorCog, TreePalm } from "lucide-react";
 import { GetIntentLogo, JitsuLogo } from "@/components/icons";
 
 export const Kw: React.FC<{ children: ReactNode }> = ({ children }) => {
-  return <span className="font-medium italic text-blue-700">{children}</span>;
+  return <em className="cvKeyword">{children}</em>;
 };
 
 export type CvCopy = {
@@ -51,15 +51,18 @@ export const cvCopy: Record<string, CvCopy> = {
     },
     intro: (
       <>
-        Hands-on engineering leader with 20+ years building high-scale distributed systems and products. Founded two
-        companies—one <Kw>YC</Kw>-backed, another scaled to <Kw>$4M ARR</Kw>. Combines hands-on coding with product vision,
-        system architecture, and scaling teams to 60+ engineers.
-      </>
+        Engineering leader and repeat founder with 20+ years building high-scale distributed systems and product engineering teams. Hands-on with code and 
+        architecture, and experienced scaling orgs from early stage. Built systems handling 1M req/sec, grew a 
+        startup to $4M ARR, and led distributed teams across. Two-time founder, including the Y Combinator–backed Jitsu (YC S20) and one exit.</>
     ),
     expertise: {
       items: [
         <>
-          <b>Technical Leadership and Architecture:</b> Scaled teams to 60+ engineers, architected distributed systems processing 1M+
+          <b>AI:</b> Deep expertise in LLM internals and production AI agents. Built multiple <Kw>MCP</Kw> servers and agent
+          systems and RAG-pipelines
+        </>,
+        <>
+          <b>Technical Leadership and Architecture:</b> Scaled teams to 30+ engineers, architected distributed systems processing 1M+
           requests/second
         </>,
         <>
@@ -71,18 +74,14 @@ export const cvCopy: Record<string, CvCopy> = {
           with <Kw>BigQuery</Kw>, <Kw>Kafka</Kw>, <Kw>Hadoop</Kw>, <Kw>ClickHouse</Kw>
         </>,
         <>
-          <b>AI:</b> Deep expertise in LLM internals and production AI agents. Built multiple <Kw>MCP</Kw> servers and agent
-          systems and RAG-pipelines
-        </>,
-        <>
           <b>Product Leadership:</b> Founded two profitable B2B SaaS companies—one <Kw>YC</Kw>-backed, one scaled to{" "}
           <Kw>$4M ARR</Kw>
         </>,
       ],
       closingSection: (
         <>
-          Technology Stack: <Kw>TypeScript</Kw>/<Kw>Next.js</Kw>, <Kw>Python</Kw>, <Kw>Java</Kw>, <Kw>Go</Kw>, <Kw>Kubernetes</Kw>,{" "}
-          <Kw>Terraform</Kw>, <Kw>Kafka</Kw>, <Kw>ClickHouse</Kw>
+          <b>Skills</b>: <Kw>TypeScript</Kw>, <Kw>Next.js</Kw>, <Kw>Python</Kw>, <Kw>Java</Kw>, <Kw>Go</Kw>, <Kw>Kubernetes</Kw>,{" "}
+          <Kw>Terraform</Kw>, <Kw>Kafka</Kw>, <Kw>ClickHouse</Kw>, <Kw>Postgres</Kw>
         </>
       ),
     },
@@ -170,13 +169,13 @@ export const cvCopy: Record<string, CvCopy> = {
         preamble: <>Led engineering teams building high-performance adtech platforms for external clients and internal products</>,
         highlights: [
           <>
-            Led team building real-time bidding platform and CTR prediction system for PulsePoint AdExchange (now WebMD) processing 1M+ requests/second (<Kw>Java</Kw>, <Kw>Hadoop</Kw>/<Kw>HBase</Kw>)
+            Built CTR prediction and reporting system for PulsePoint AdExchange based on <Kw>Apache Hadoop</Kw>
           </>,
           <>
-            Led engineering team for eHarmony advertising platform
+            Built a matching optimization algorithm for eHarmony
           </>,
           <>
-            Architected internal DMP framework
+            Architected first version of internal DMP framework
           </>,
         ],
         logo: "/iponweb.png",

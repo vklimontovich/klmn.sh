@@ -175,3 +175,17 @@ model AiChatState {
   telegramUserId String
   state          Json?
 }
+
+model AnalyticsEvents {
+  id              String   @id @default(uuid())
+  timestamp       DateTime @default(now())
+  eventType       String
+  ip              String?
+  location        Json?
+  pageUrl         String?
+  anonymousUserId String?
+  hostname        String?
+  params          Json?
+  userAgentHeader String?
+  userAgent       Json?
+}
