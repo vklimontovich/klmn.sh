@@ -5,21 +5,21 @@ import { Metadata } from "next";
 const copy = cvCopy.default;
 
 export const metadata: Metadata = {
-  title: `${copy.name} - CV`,
+  title: `${copy.name} - Resume`,
   description: copy.shortDescription,
   robots: {
     index: false,
     follow: false,
   },
   openGraph: {
-    title: `${copy.name} - CV`,
+    title: `${copy.name} - Resume`,
     description: copy.shortDescription,
     type: "profile",
     images: ["/api/og/cv"],
   },
   twitter: {
     card: "summary_large_image",
-    title: `${copy.name} - CV`,
+    title: `${copy.name} - Resume`,
     description: copy.shortDescription,
   },
 };
