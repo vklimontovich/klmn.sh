@@ -188,4 +188,5 @@ model AnalyticsEvents {
   params          Json?
   userAgentHeader String?
   userAgent       Json?
+  requestHeaders  Json?
 }

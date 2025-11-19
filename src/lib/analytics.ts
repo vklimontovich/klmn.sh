@@ -93,6 +93,12 @@ export class Analytics {
     // Remove functions from userAgent object
     const userAgent = serializeToJson(userAgentResult);
 
+    // Collect all request headers
+    const requestHeaders: Record<string, string> = {};
+    this.request.headers.forEach((value, key) => {
+      requestHeaders[key] = value;
+    });
+
     const data = {
       eventType: eventName,
       ip,
@@ -103,6 +109,7 @@ export class Analytics {
       params: omit(params, "pageUrl") as any,
       userAgentHeader,
       userAgent: omit(userAgent, "ua") as any,
+      requestHeaders: requestHeaders as any,
     };
     console.log("Saving event", data);
     await prisma.analyticsEvents.create({
