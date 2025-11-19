@@ -80,8 +80,8 @@ export const cvCopy: Record<string, CvCopy> = {
       ],
       closingSection: (
         <>
-          <b>Skills</b>: <Kw>TypeScript</Kw>, <Kw>Next.js</Kw>, <Kw>Python</Kw>, <Kw>Java</Kw>, <Kw>Go</Kw>, <Kw>Kubernetes</Kw>,{" "}
-          <Kw>Terraform</Kw>, <Kw>Kafka</Kw>, <Kw>ClickHouse</Kw>, <Kw>Postgres</Kw>
+          <b>Skills</b>: <Kw>Engineering Management</Kw>, <Kw>System Architecture</Kw>, <Kw>Kubernetes</Kw>, <Kw>AWS</Kw>,{" "}
+          <Kw>Terraform</Kw>, <Kw>TypeScript</Kw>, <Kw>Next.js</Kw>, <Kw>Python</Kw>, <Kw>Java</Kw>, <Kw>Go</Kw>, <Kw>ClickHouse</Kw>, <Kw>Postgres</Kw>
         </>
       ),
     },
@@ -201,7 +201,7 @@ export const cvCopy: Record<string, CvCopy> = {
         period: "Summer 2020",
       },
       {
-        institution: "Moscow State University",
+        institution: "Moscow State University (Mathematics)",
         period: "2003-2007",
       },
       {
