@@ -31,24 +31,10 @@ export const essays: Essay[] = [
     date: new Date("2024-05-12"),
   },
   {
-    slug: "russian-runway",
-    title: "How much of the \"runway\" Russia has left?",
-    soon: true,
-    subtitle: "For how long Russia can wage a war in Ukraine before running out of money",
-    date: new Date("2024-05-12"),
-  },
-  {
     slug: "pivotitus",
     title: "Pivots are bad for startup industry",
     soon: true,
     subtitle: "How startups get infected with pivotitus and what are the consequences",
-    date: new Date("2024-05-12"),
-  },
-  {
-    slug: "ai-antihype",
-    title: "AI Anti-hype",
-    soon: true,
-    subtitle: "What is going to happen with AI startups after the hype is over",
     date: new Date("2024-05-12"),
   },
 ];
