@@ -107,7 +107,7 @@ export const cvCopy: Record<string, CvCopy> = {
         url: "https://klmn.sh",
       },
       {
-        company: "Jitsu",
+        company: "Jitsu (YC S20)",
         role: "Founder & CEO",
         location: "New York, NY",
         period: [new Date(2020, 2), null],
