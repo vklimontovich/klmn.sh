@@ -88,7 +88,7 @@ export const cvCopy: Record<string, CvCopy> = {
     experience: [
       {
         company: "Independent Consulting",
-        role: "Software Architect",
+        role: "AI Software Architect",
         location: "New York, NY",
         period: [new Date(2024, 11), null],
         preamble: <>Hands-on consulting for early-stage startups on technical architecture, infrastructure, and AI strategy</>,
