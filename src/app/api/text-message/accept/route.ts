@@ -1,10 +1,8 @@
 import { prisma } from "@/lib/server/prisma";
-import { Resend } from "resend";
 
 import twilio from "twilio";
 import TwilioSDK from "twilio";
 import { NextRequest, NextResponse } from "next/server";
-import { telegramClient } from "@/lib/server/telegram";
 import VoiceResponse = TwilioSDK.twiml.VoiceResponse;
 import { resend } from "@/lib/server/email";
 import { log } from "@/lib/server/log";
@@ -13,27 +11,6 @@ const twilioClient: twilio.Twilio | undefined =
   process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN
     ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
     : undefined;
-
-
-function isNumeric(to: string) {
-  return /^\d+$/.test(to);
-}
-
-async function sendTelegramMessage(param: { to: string; text: string }) {
-  if (telegramClient) {
-    let chatId;
-    if (isNumeric(param.to)) {
-      chatId = param.to;
-    } else {
-      const contact = await prisma.telegramContacts.findFirst({ where: { userName: param.to } });
-      if (!contact) {
-        throw new Error(`Telegram contact ${param.to} not found`);
-      }
-      chatId = contact.userId;
-    }
-    await telegramClient.sendMessage(chatId, param.text, { parse_mode: "HTML" });
-  }
-}
 
 async function sendEmail(param: { subject: string; from: string; to: string; text: string }) {
   if (resend) {
@@ -95,7 +72,7 @@ export async function POST(request: NextRequest) {
       headers: { "Content-Type": "application/json" },
     });
   }
-  const fullUrl = request.url; //.replace("http://localhost:6401/", "https://klmn.sh/");
+  const fullUrl = request.url;
   if (!twilio.validateRequest(process.env.TWILIO_AUTH_TOKEN, twilioSig!, fullUrl, params)) {
     return new Response(JSON.stringify({ ok: false, error: "Twilio signature is invalid" }), {
       status: 401,
@@ -138,16 +115,6 @@ export async function POST(request: NextRequest) {
         } catch (e: any) {
           routeStatuses[`${type} ${destination}`] = `error ${e?.message}`;
         }
-      } else if (type === "telegram") {
-        try {
-          await sendTelegramMessage({
-            to: destination,
-            text: `New SMS from ${from}: ${body}`,
-          });
-          routeStatuses[`${type} ${destination}`] = "ok";
-        } catch (e: any) {
-          routeStatuses[`${type} ${destination}`] = `error ${e?.message}`;
-        }
       }
     }
 
@@ -176,16 +143,6 @@ export async function POST(request: NextRequest) {
             to: destination,
             from: to,
             text: `Missed call from ${from}. Full details in email`,
-          });
-          routeStatuses[`${type} ${destination}`] = "ok";
-        } catch (e: any) {
-          routeStatuses[`${type} ${destination}`] = `error ${e?.message}`;
-        }
-      } else if (type === "telegram") {
-        try {
-          await sendTelegramMessage({
-            to: destination,
-            text: `Got a call from ${from}. Full details:\n<pre>${JSON.stringify(params, null, 2)}</pre>`,
           });
           routeStatuses[`${type} ${destination}`] = "ok";
         } catch (e: any) {

@@ -12,10 +12,21 @@ async function handleEvent(request: NextRequest) {
   const paramsString = searchParams.get("params");
   const params = paramsString ? JSON.parse(paramsString) : {};
 
+  // Parse client side context
+  const cscString = searchParams.get("csc");
+  let clientSideContext = null;
+  if (cscString) {
+    try {
+      clientSideContext = JSON.parse(cscString);
+    } catch (error) {
+      console.warn("Failed to parse client side context:", error);
+    }
+  }
+
   const response = NextResponse.json({ success: true });
   const analytics = new Analytics(request, response);
 
-  await analytics.registerEvent(type, params);
+  await analytics.registerEvent(type, params, clientSideContext);
 
   return response;
 }

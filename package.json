@@ -32,7 +32,6 @@
     "lucide-react": "^0.554.0",
     "markdown-it": "^14.0.0",
     "next": "14.2.35",
-    "node-telegram-bot-api": "^0.64.0",
     "notion-client": "^6.16.0",
     "openai": "^4.24.6",
     "react": "^18",
@@ -44,7 +43,8 @@
     "sanitize-html": "^2.11.0",
     "stripe": "^14.12.0",
     "twilio": "^4.20.0",
-    "ua-parser-js": "^2.0.6"
+    "ua-parser-js": "^2.0.6",
+    "zod": "^3.24.2"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.10",
@@ -54,7 +54,6 @@
     "@types/lodash": "^4.14.202",
     "@types/markdown-it": "^13.0.7",
     "@types/node": "^20.11.0",
-    "@types/node-telegram-bot-api": "^0.64.1",
     "@types/react": "^18.2.47",
     "@types/react-dom": "^18",
     "@types/sanitize-html": "^2.9.5",

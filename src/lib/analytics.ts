@@ -2,6 +2,8 @@ import { prisma } from "@/lib/server/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { omit } from "lodash";
 import { UAParser } from "ua-parser-js";
+import { getLocationForIp } from "@/lib/server/maxmind";
+import { ClientSideContext, ClientSideContextSchema } from "@/lib/analytics-types";
 
 function serializeToJson<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj));
@@ -13,22 +15,6 @@ function getClientIp(request: NextRequest): string | null {
     request.headers.get("x-real-ip") ||
     null
   );
-}
-
-function getLocation(request: NextRequest): any {
-  const city = request.headers.get("x-vercel-ip-city")|| undefined;
-  const country = request.headers.get("x-vercel-ip-country")|| undefined;
-  const region = request.headers.get("x-vercel-ip-country-region")|| undefined;
-  const latitude = request.headers.get("x-vercel-ip-latitude") || undefined;
-  const longitude = request.headers.get("x-vercel-ip-longitude") || undefined;
-
-  return {
-    city,
-    country,
-    region,
-    latitude,
-    longitude,
-  };
 }
 
 function getPortForProtocol(protocol: string, port: string): string | null {
@@ -47,7 +33,6 @@ function getOrigin(request: NextRequest): string {
   const protocol = forwardedProto || (process.env.NODE_ENV === "production" ? "https" : "http");
   const host = forwardedHost || request.headers.get("host");
 
-  // If there's a forwarded port, include it, otherwise the host may already include the port
   const port = forwardedPort && !host?.includes(":") ? getPortForProtocol(protocol, forwardedPort) : null;
   const portSuffix = port ? `:${port}` : "";
 
@@ -63,12 +48,31 @@ export class Analytics {
     this.response = response;
   }
 
-  async registerEvent(eventName: string, params: Record<string, any> = {}) {
+  async registerEvent(
+    eventName: string,
+    params: Record<string, any> = {},
+    clientSideContext?: ClientSideContext | null
+  ) {
     const ip = getClientIp(this.request);
-    const location = getLocation(this.request);
     const origin = getOrigin(this.request);
     const hostname = origin.replace(/^https?:\/\//, "");
     const isSecure = origin.startsWith("https://");
+
+    // Get location from MaxMind
+    let location = null;
+    if (ip) {
+      try {
+        location = await getLocationForIp(ip);
+      } catch (error) {
+        console.error("Failed to get location for IP:", ip, error);
+      }
+    }
+
+    // Skip bot traffic
+    if (location?.isBot) {
+      console.log("Skipping bot traffic from IP:", ip);
+      return;
+    }
 
     // Get or generate anonymous user ID
     const existingUserId = this.request.cookies.get("anonymous_user_id")?.value;
@@ -99,6 +103,16 @@ export class Analytics {
       requestHeaders[key] = value;
     });
 
+    // Validate client side context if provided
+    let validatedCsc: ClientSideContext | null = null;
+    if (clientSideContext) {
+      try {
+        validatedCsc = ClientSideContextSchema.parse(clientSideContext);
+      } catch (error) {
+        console.warn("Invalid client side context, ignoring:", error);
+      }
+    }
+
     const data = {
       eventType: eventName,
       ip,
@@ -110,6 +124,7 @@ export class Analytics {
       userAgentHeader,
       userAgent: omit(userAgent, "ua") as any,
       requestHeaders: requestHeaders as any,
+      clientSideContext: validatedCsc as any,
     };
     console.log("Saving event", data);
     await prisma.analyticsEvents.create({
