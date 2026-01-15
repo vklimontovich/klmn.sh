@@ -30,13 +30,19 @@ export async function POST(request: NextRequest) {
     });
 
     if (events.length === 0) {
+      console.log("[reprocess] No events to reprocess");
       return NextResponse.json({ message: "No events to reprocess", processed: 0 });
     }
 
+    console.log(`[reprocess] Processing ${events.length} events...`);
     let processed = 0;
+    let skipped = 0;
 
     for (const event of events) {
-      if (!event.ip) continue;
+      if (!event.ip) {
+        skipped++;
+        continue;
+      }
 
       const location = await getLocationForIp(event.ip);
 
@@ -46,8 +52,15 @@ export async function POST(request: NextRequest) {
           data: { location: location as any },
         });
         processed++;
+        if (processed % 50 === 0) {
+          console.log(`[reprocess] Processed ${processed}/${events.length}`);
+        }
+      } else {
+        skipped++;
       }
     }
+
+    console.log(`[reprocess] Done: ${processed} processed, ${skipped} skipped`);
 
     const remaining = await prisma.analyticsEvents.count({
       where: {

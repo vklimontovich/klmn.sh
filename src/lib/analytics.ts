@@ -126,7 +126,7 @@ export class Analytics {
       requestHeaders: requestHeaders as any,
       clientSideContext: validatedCsc as any,
     };
-    console.log("Saving event", data);
+    console.log(`[analytics] ${eventName} ${params.pageUrl || hostname} ${ip || "no-ip"}`);
     await prisma.analyticsEvents.create({
       data: data,
     });

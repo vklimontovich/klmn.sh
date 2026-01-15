@@ -1,30 +1,12 @@
 import { prisma } from "@/lib/server/prisma";
-
-// MaxMind Insights API response type (no zod - just type assertion)
-export type MaxMindLocation = {
-  city?: { geonameId?: number; names?: Record<string, string>; name?: string };
-  continent?: { code?: string; geonameId?: number; names?: Record<string, string>; name?: string };
-  country?: { geonameId?: number; isoCode?: string; names?: Record<string, string>; name?: string; isInEuropeanUnion?: boolean };
-  location?: { accuracyRadius?: number; averageIncome?: number; latitude?: number; longitude?: number; metroCode?: number; populationDensity?: number; timeZone?: string };
-  postal?: { code?: string; confidence?: number };
-  registeredCountry?: { geonameId?: number; isoCode?: string; names?: Record<string, string>; name?: string; isInEuropeanUnion?: boolean };
-  representedCountry?: { geonameId?: number; isoCode?: string; names?: Record<string, string>; name?: string; type?: string; isInEuropeanUnion?: boolean };
-  subdivisions?: Array<{ geonameId?: number; isoCode?: string; names?: Record<string, string>; name?: string; confidence?: number }>;
-  traits?: {
-    autonomousSystemNumber?: number; autonomousSystemOrganization?: string; connectionType?: string;
-    domain?: string; ipAddress?: string; isAnonymous?: boolean; isAnonymousProxy?: boolean;
-    isAnonymousVpn?: boolean; isAnycast?: boolean; isHostingProvider?: boolean; isLegitimateProxy?: boolean;
-    isPublicProxy?: boolean; isResidentialProxy?: boolean; isSatelliteProvider?: boolean;
-    isTorExitNode?: boolean; isp?: string; mobileCountryCode?: string; mobileNetworkCode?: string;
-    network?: string; organization?: string; staticIpScore?: number; userCount?: number; userType?: string;
-  };
-  isBot?: boolean;
-};
+import { MaxMindResponse, MaxMindResponseSchema } from "@/lib/analytics-types";
 
 const CACHE_DURATION_DAYS = 10;
 
+// Bot user types from MaxMind
+const BOT_USER_TYPES = ["search_engine_spider", "crawler", "content_server"];
+
 function isPrivateIp(ip: string): boolean {
-  // Check for private IP ranges and localhost
   const privateRanges = [
     /^10\./,
     /^172\.(1[6-9]|2[0-9]|3[0-1])\./,
@@ -38,93 +20,127 @@ function isPrivateIp(ip: string): boolean {
   return privateRanges.some(range => range.test(ip));
 }
 
-async function fetchFromMaxMind(ip: string): Promise<MaxMindLocation | null> {
+function detectBot(data: MaxMindResponse): boolean {
+  const traits = data.traits;
+  if (!traits) return false;
+
+  // Check user type (MaxMind's classification)
+  if (traits.user_type && BOT_USER_TYPES.includes(traits.user_type)) return true;
+
+  // Check hosting/proxy indicators from MaxMind
+  if (traits.is_hosting_provider) return true;
+  if (traits.is_anonymous_proxy) return true;
+  if (traits.is_public_proxy) return true;
+  if (traits.is_tor_exit_node) return true;
+
+  return false;
+}
+
+// Strip non-English names from the response
+function stripToEnglish(data: MaxMindResponse): MaxMindResponse {
+  const stripNames = (names?: { en?: string }): { en?: string } | undefined => {
+    if (!names?.en) return undefined;
+    return { en: names.en };
+  };
+
+  return {
+    ...data,
+    city: data.city ? { ...data.city, names: stripNames(data.city.names) } : undefined,
+    continent: data.continent ? { ...data.continent, names: stripNames(data.continent.names) } : undefined,
+    country: data.country ? { ...data.country, names: stripNames(data.country.names) } : undefined,
+    registered_country: data.registered_country
+      ? { ...data.registered_country, names: stripNames(data.registered_country.names) }
+      : undefined,
+    represented_country: data.represented_country
+      ? { ...data.represented_country, names: stripNames(data.represented_country.names) }
+      : undefined,
+    subdivisions: data.subdivisions?.map(s => ({ ...s, names: stripNames(s.names) })),
+    // Remove maxmind metadata (queries_remaining etc)
+    maxmind: undefined,
+  };
+}
+
+async function fetchFromMaxMind(ip: string): Promise<MaxMindResponse | null> {
   const accountId = process.env.MAXMIND_ACCOUNT_ID;
   const licenseKey = process.env.MAXMIND_LICENSE_KEY;
 
   if (!accountId || !licenseKey) {
-    throw new Error("MaxMind credentials not configured: MAXMIND_ACCOUNT_ID and MAXMIND_LICENSE_KEY required");
+    throw new Error("MaxMind credentials not configured");
   }
 
   const auth = Buffer.from(`${accountId}:${licenseKey}`).toString("base64");
 
   try {
-    const response = await fetch(
-      `https://geoip.maxmind.com/geoip/v2.1/insights/${ip}`,
-      {
-        headers: {
-          Authorization: `Basic ${auth}`,
-          Accept: "application/json",
-        },
-      }
-    );
+    const response = await fetch(`https://geoip.maxmind.com/geoip/v2.1/insights/${ip}`, {
+      headers: {
+        Authorization: `Basic ${auth}`,
+        Accept: "application/json",
+      },
+    });
 
     if (!response.ok) {
-      if (response.status === 404) {
-        // IP not found in database
-        return null;
-      }
+      if (response.status === 404) return null;
       console.error(`MaxMind API error: ${response.status} ${response.statusText}`);
       return null;
     }
 
     const data = await response.json();
-    return data as MaxMindLocation;
+    return MaxMindResponseSchema.parse(data);
   } catch (error) {
     console.error("Failed to fetch from MaxMind:", error);
     return null;
   }
 }
 
-export async function getLocationForIp(ip: string): Promise<MaxMindLocation | null> {
-  if (!ip || isPrivateIp(ip)) {
-    return null;
-  }
+export async function getLocationForIp(ip: string): Promise<MaxMindResponse | null> {
+  if (!ip || isPrivateIp(ip)) return null;
 
-  // Check cache first
-  const cached = await prisma.maxMindCache.findUnique({
-    where: { ip },
-  });
+  // Check cache first (already processed/stripped)
+  const cached = await prisma.maxMindCache.findUnique({ where: { ip } });
 
   if (cached && cached.expiresAt > new Date()) {
-    return cached.location as MaxMindLocation;
+    const location = cached.location as MaxMindResponse;
+    location.isBot = detectBot(location);
+    return location;
   }
 
   // Fetch from MaxMind
-  const location = await fetchFromMaxMind(ip);
+  const rawData = await fetchFromMaxMind(ip);
+  if (!rawData) return null;
 
-  if (location) {
-    // Add isBot flag
-    location.isBot = detectBot(location);
+  // Process: strip non-English, detect bot
+  const location = stripToEnglish(rawData);
+  location.isBot = detectBot(rawData);
 
-    // Update or create cache entry
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + CACHE_DURATION_DAYS);
+  // Cache
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + CACHE_DURATION_DAYS);
 
-    await prisma.maxMindCache.upsert({
-      where: { ip },
-      create: {
-        ip,
-        location: location as any,
-        expiresAt,
-      },
-      update: {
-        location: location as any,
-        expiresAt,
-      },
-    });
-  }
+  await prisma.maxMindCache.upsert({
+    where: { ip },
+    create: { ip, location: location as any, expiresAt },
+    update: { location: location as any, expiresAt },
+  });
 
   return location;
 }
 
-function detectBot(location: MaxMindLocation): boolean {
-  if (!location.traits) return false;
+// Helper to get display-friendly organization name
+export function getDisplayOrg(location: MaxMindResponse | null): string {
+  if (!location?.traits) return "Unknown";
 
-  const botUserTypes = ["search_engine_spider", "crawler"];
-  if (location.traits.userType && botUserTypes.includes(location.traits.userType)) {
-    return true;
+  const { user_type, organization, isp } = location.traits;
+
+  // For residential users, show "Residential" or ISP name
+  if (user_type === "residential") {
+    return isp || "Residential";
   }
 
-  return false;
+  // For business, show organization if it looks like a real company (not ISP)
+  if (user_type === "business" && organization && organization !== isp) {
+    return organization;
+  }
+
+  // Default to ISP or organization
+  return isp || organization || "Unknown";
 }
