@@ -61,6 +61,8 @@ model AnalyticsEvents {
   userAgentHeader   String?
   userAgent         Json?
   requestHeaders    Json?
+  userId            String?
+  userTraits        Json?
   clientSideContext Json?
 }
 
