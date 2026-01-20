@@ -111,8 +111,37 @@ export async function POST(request: NextRequest) {
       clientSideContext: payload.clientSideContext as any || null,
     };
 
-    await prisma.analyticsEvents.create({
+    const event = await prisma.analyticsEvents.create({
       data,
+    });
+
+    return NextResponse.json({ success: true, id: event.id });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: "Invalid payload", details: error.issues }, { status: 400 });
+    }
+    console.error("Failed to ingest event:", error);
+    return NextResponse.json({ error: "Failed to ingest event" }, { status: 500 });
+  }
+}
+
+const PatchPayloadSchema = z.object({
+  id: z.string(),
+  clientSideContext: ClientSideContextSchema,
+});
+
+export async function PATCH(request: NextRequest) {
+  if (!checkAuth(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const body = await request.json();
+    const payload = PatchPayloadSchema.parse(body);
+
+    await prisma.analyticsEvents.update({
+      where: { id: payload.id },
+      data: { clientSideContext: payload.clientSideContext as any },
     });
 
     return NextResponse.json({ success: true });
@@ -120,7 +149,7 @@ export async function POST(request: NextRequest) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Invalid payload", details: error.issues }, { status: 400 });
     }
-    console.error("Failed to ingest event:", error);
-    return NextResponse.json({ error: "Failed to ingest event" }, { status: 500 });
+    console.error("Failed to patch event:", error);
+    return NextResponse.json({ error: "Failed to patch event" }, { status: 500 });
   }
 }

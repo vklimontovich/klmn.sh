@@ -127,8 +127,25 @@ export class Analytics {
       clientSideContext: validatedCsc as any,
     };
     console.log(`[analytics] ${eventName} ${params.pageUrl || hostname} ${ip || "no-ip"}`);
-    await prisma.analyticsEvents.create({
+    const event = await prisma.analyticsEvents.create({
       data: data,
     });
+    return event.id;
+  }
+
+  static async patchClientSideContext(id: string, clientSideContext: ClientSideContext): Promise<boolean> {
+    let validatedCsc: ClientSideContext | null = null;
+    try {
+      validatedCsc = ClientSideContextSchema.parse(clientSideContext);
+    } catch (error) {
+      console.warn("Invalid client side context, ignoring:", error);
+      return false;
+    }
+
+    await prisma.analyticsEvents.update({
+      where: { id },
+      data: { clientSideContext: validatedCsc as any },
+    });
+    return true;
   }
 }

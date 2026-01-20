@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { ClientSideContext } from "@/lib/analytics-types";
 
@@ -56,6 +56,15 @@ function getClientSideContext(): ClientSideContext {
   return context;
 }
 
+function getCookie(name: string): string | null {
+  const match = document.cookie.match(new RegExp(`(^| )${name}=([^;]+)`));
+  return match ? match[2] : null;
+}
+
+function deleteCookie(name: string) {
+  document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+}
+
 export function useAnalytics() {
   const pathname = usePathname();
 
@@ -66,16 +75,10 @@ export function useAnalytics() {
     ) => {
       const { params = {}, signal, preferBeacon = false } = options;
 
-      // Always add pageUrl if not specified
-      const eventParams = {
-        pageUrl: pathname,
-        ...params,
-      };
-
+      const eventParams = { pageUrl: pathname, ...params };
       const csc = encodeURIComponent(JSON.stringify(getClientSideContext()));
       const eventUrl = `/api/event?type=${encodeURIComponent(eventName)}&params=${encodeURIComponent(JSON.stringify(eventParams))}&csc=${csc}`;
 
-      // Use sendBeacon for better reliability on page unload
       if (preferBeacon && navigator.sendBeacon) {
         navigator.sendBeacon(eventUrl);
         return;
@@ -84,55 +87,47 @@ export function useAnalytics() {
       try {
         await fetch(eventUrl, { signal });
       } catch (error) {
-        if (error instanceof Error && error.name === "AbortError") {
-          // Request was cancelled, ignore
-          return;
-        }
+        if (error instanceof Error && error.name === "AbortError") return;
         console.error(`Failed to track event ${eventName}:`, error);
       }
     },
   };
 }
 
+// PageView is registered by middleware, this component patches it with clientSideContext
 export function PageViewAnalytics() {
   const analytics = useAnalytics();
-  const abortControllerRef = useRef<AbortController | null>(null);
   const pathname = usePathname();
 
+  // Patch pageView event with clientSideContext
   useEffect(() => {
-    const trackPageView = async () => {
-      // Cancel previous page view request if still pending
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
+    const eventId = getCookie("x-analytics-event-id");
+    if (!eventId) return;
 
-      const abortController = new AbortController();
-      abortControllerRef.current = abortController;
+    deleteCookie("x-analytics-event-id");
 
-      await analytics.trackEvent("pageView", {
-        signal: abortController.signal,
-      });
-    };
+    fetch("/api/event", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: eventId, clientSideContext: getClientSideContext() }),
+    }).catch((error) => {
+      console.error("Failed to patch pageView with clientSideContext:", error);
+    });
+  }, [pathname]);
 
-    trackPageView();
-  }, [pathname, analytics]);
-
+  // Track link clicks
   useEffect(() => {
     const handleClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
       const link = target.closest("a");
 
       if (link && link.href) {
-        const url = link.href;
-        const isExternal = link.hostname !== window.location.hostname;
-        const isDownload = link.hasAttribute("download");
-
         analytics.trackEvent("linkClick", {
           preferBeacon: true,
           params: {
-            url,
-            isExternal,
-            isDownload,
+            url: link.href,
+            isExternal: link.hostname !== window.location.hostname,
+            isDownload: link.hasAttribute("download"),
             text: link.textContent?.trim() || "",
           },
         });
@@ -140,10 +135,7 @@ export function PageViewAnalytics() {
     };
 
     document.addEventListener("click", handleClick);
-
-    return () => {
-      document.removeEventListener("click", handleClick);
-    };
+    return () => document.removeEventListener("click", handleClick);
   }, [pathname, analytics]);
 
   return null;

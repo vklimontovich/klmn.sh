@@ -26,9 +26,9 @@ async function handleEvent(request: NextRequest) {
   const response = NextResponse.json({ success: true });
   const analytics = new Analytics(request, response);
 
-  await analytics.registerEvent(type, params, clientSideContext);
+  const id = await analytics.registerEvent(type, params, clientSideContext);
 
-  return response;
+  return NextResponse.json({ success: true, id }, { headers: response.headers });
 }
 
 export async function GET(request: NextRequest) {
@@ -46,5 +46,26 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Failed to register event:", error);
     return NextResponse.json({ error: "Failed to register event" }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { id, clientSideContext } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: "Event id is required" }, { status: 400 });
+    }
+
+    if (!clientSideContext) {
+      return NextResponse.json({ error: "clientSideContext is required" }, { status: 400 });
+    }
+
+    const success = await Analytics.patchClientSideContext(id, clientSideContext);
+    return NextResponse.json({ success });
+  } catch (error) {
+    console.error("Failed to patch event:", error);
+    return NextResponse.json({ error: "Failed to patch event" }, { status: 500 });
   }
 }
