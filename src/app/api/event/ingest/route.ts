@@ -29,7 +29,19 @@ export async function GET() {
   return NextResponse.json(z.toJSONSchema(IngestPayloadSchema));
 }
 
+function checkAuth(request: NextRequest): boolean {
+  const keys = (process.env.ANALYTICS_KEYS || "").split(";").filter(Boolean);
+  if (keys.length === 0) return true; // No keys configured = no auth required
+  const authHeader = request.headers.get("authorization") || "";
+  const token = authHeader.replace(/^Bearer\s+/i, "");
+  return keys.includes(token);
+}
+
 export async function POST(request: NextRequest) {
+  if (!checkAuth(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const body = await request.json();
     const payload = IngestPayloadSchema.parse(body);
