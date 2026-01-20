@@ -1,9 +1,9 @@
 "use client";
 
 import { AnalyticsEvents } from "@prisma/client";
-import { useMemo, useState, useCallback } from "react";
+import { useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Table, Checkbox, Button, Drawer, Tag, Space, Tooltip } from "antd";
+import { Table, Checkbox, Button, Tag, Space, Tooltip } from "antd";
 import { ReloadOutlined, RobotOutlined, CloudServerOutlined, CopyOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
@@ -107,7 +107,6 @@ function getDeviceBrowser(ua: UserAgentData | null): { label: string; type: "mob
 export function AnalyticsTable({ events, showBots, showLocalhost }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [selectedEvent, setSelectedEvent] = useState<AnalyticsEvents | null>(null);
 
   const filteredEvents = useMemo(() => {
     return events.filter((event) => {
@@ -130,10 +129,6 @@ export function AnalyticsTable({ events, showBots, showLocalhost }: Props) {
   const handleRefresh = () => {
     router.refresh();
   };
-
-  const handleCloseDrawer = useCallback(() => {
-    setSelectedEvent(null);
-  }, []);
 
   const columns: ColumnsType<AnalyticsEvents> = [
     {
@@ -321,16 +316,6 @@ export function AnalyticsTable({ events, showBots, showLocalhost }: Props) {
         );
       },
     },
-    {
-      title: "",
-      key: "actions",
-      width: 80,
-      render: (_: unknown, record: AnalyticsEvents) => (
-        <Button type="link" size="small" onClick={() => setSelectedEvent(record)}>
-          Details
-        </Button>
-      ),
-    },
   ];
 
   return (
@@ -366,31 +351,25 @@ export function AnalyticsTable({ events, showBots, showLocalhost }: Props) {
         size="small"
         pagination={{ pageSize: 50, showSizeChanger: true, pageSizeOptions: [20, 50, 100, 200] }}
         scroll={{ x: 1200 }}
+        expandable={{
+          expandedRowRender: (record) => (
+            <div className="p-4 bg-gray-50">
+              <div className="flex justify-end mb-2">
+                <Button
+                  size="small"
+                  icon={<CopyOutlined />}
+                  onClick={() => navigator.clipboard.writeText(JSON.stringify(record, null, 2))}
+                >
+                  Copy JSON
+                </Button>
+              </div>
+              <pre className="text-xs font-mono whitespace-pre-wrap bg-white p-4 rounded border overflow-auto max-h-96">
+                {JSON.stringify(record, null, 2)}
+              </pre>
+            </div>
+          ),
+        }}
       />
-
-      <Drawer
-        title="Event Details"
-        placement="right"
-        width="70%"
-        onClose={handleCloseDrawer}
-        open={!!selectedEvent}
-        extra={
-          <Button
-            icon={<CopyOutlined />}
-            onClick={() => {
-              if (selectedEvent) {
-                navigator.clipboard.writeText(JSON.stringify(selectedEvent, null, 2));
-              }
-            }}
-          >
-            Copy JSON
-          </Button>
-        }
-      >
-        <pre className="text-xs font-mono whitespace-pre-wrap">
-          {selectedEvent ? JSON.stringify(selectedEvent, null, 2) : ""}
-        </pre>
-      </Drawer>
     </div>
   );
 }
