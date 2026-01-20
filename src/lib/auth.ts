@@ -1,7 +1,10 @@
 import { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 
-const ALLOWED_EMAILS = ["v@klmn.sh", "vladimir@klmn.sh"];
+function getAllowedEmails(): string[] {
+  const envEmails = process.env.ADMIN_ALLOWED_EMAILS || "";
+  return envEmails.split(";").map((e) => e.trim()).filter(Boolean);
+}
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -12,7 +15,9 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async signIn({ user }) {
-      return ALLOWED_EMAILS.includes(user.email || "");
+      const allowed = getAllowedEmails();
+      if (allowed.length === 0) return true; // No restriction if not configured
+      return allowed.includes(user.email || "");
     },
   },
   pages: {
