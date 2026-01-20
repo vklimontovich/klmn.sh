@@ -1,0 +1,15 @@
+all:
+  children:
+    master:
+      hosts:
+        master.klmn.sh:
+    workers:
+      hosts:
+        dc.vpnclub.org:
+          tailscale_exit_node: true
+        nl.vpnclub.org:
+          tailscale_exit_node: true
+  vars:
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+    ansible_become: true
+    ansible_become_method: sudo

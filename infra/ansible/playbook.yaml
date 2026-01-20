@@ -1,0 +1,49 @@
+---
+- name: Configure K3s cluster nodes
+  hosts: all
+  vars:
+    github_token: "{{ lookup('env', 'GITHUB_TOKEN') }}"
+    tailscale_auth_key: "{{ lookup('env', 'TAILSCALE_AUTH_KEY') }}"
+    k3s_master: "master.klmn.sh"
+    k3s_master_url: "https://{{ k3s_master }}:6443"
+
+  tasks:
+    - name: Install Docker
+      ansible.builtin.include_tasks:
+        file: tasks/docker.yaml
+        apply:
+          tags: [docker]
+      tags: [docker]
+
+    - name: Install Tailscale
+      ansible.builtin.include_tasks:
+        file: tasks/tailscale.yaml
+        apply:
+          tags: [tailscale]
+      tags: [tailscale]
+
+    - name: Install K3s
+      ansible.builtin.include_tasks:
+        file: tasks/k3s.yaml
+        apply:
+          tags: [k3s]
+      tags: [k3s]
+
+  handlers:
+    - name: Reload docker socket
+      systemd:
+        name: docker.socket
+        state: restarted
+        daemon_reload: true
+
+    - name: Restart K3s
+      systemd:
+        name: k3s
+        state: restarted
+      when: inventory_hostname in groups['master']
+
+    - name: Restart K3s agent
+      systemd:
+        name: k3s-agent
+        state: restarted
+      when: inventory_hostname in groups['workers']

@@ -1,0 +1,152 @@
+resources:
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: xray-config
+      namespace: xray
+    data:
+      config.json: |
+        {
+          "log": {
+            "loglevel": "info"
+          },
+          "inbounds": [
+            {
+              "tag": "vless-reality",
+              "port": 443,
+              "protocol": "vless",
+              "settings": {
+                "clients": [],
+                "decryption": "none"
+              },
+              "streamSettings": {
+                "network": "tcp",
+                "security": "reality",
+                "realitySettings": {
+                  "show": false,
+                  "dest": "www.microsoft.com:443",
+                  "xver": 0,
+                  "serverNames": ["www.microsoft.com"],
+                  "privateKey": "${PRIVATE_KEY}",
+                  "shortIds": ["${SHORT_ID}"]
+                }
+              },
+              "sniffing": {
+                "enabled": true,
+                "destOverride": ["http", "tls", "quic"]
+              }
+            }
+          ],
+          "outbounds": [
+            {
+              "protocol": "freedom",
+              "tag": "direct"
+            },
+            {
+              "protocol": "blackhole",
+              "tag": "block"
+            }
+          ]
+        }
+
+  - apiVersion: apps/v1
+    kind: DaemonSet
+    metadata:
+      name: xray
+      namespace: xray
+    spec:
+      selector:
+        matchLabels:
+          app: xray
+      template:
+        metadata:
+          labels:
+            app: xray
+        spec:
+          nodeSelector:
+            node-role: vpn-node
+          tolerations:
+            - key: "node.kubernetes.io/unschedulable"
+              operator: "Exists"
+              effect: "NoSchedule"
+            - key: "dedicated"
+              operator: "Equal"
+              value: "reserved"
+              effect: "NoSchedule"
+          initContainers:
+            - name: config-render
+              image: alpine:latest
+              command:
+                - sh
+                - -c
+                - |
+                  apk add --no-cache gettext jq >/dev/null
+                  # Render config with secrets
+                  envsubst < /etc/xray-template/config.json > /tmp/config.json
+                  # Merge users into config (inject clients into vless-reality inbound)
+                  CLIENTS=$(jq -c '.inbounds[0].settings.clients' /etc/xray-template/users.json)
+                  jq --argjson clients "$CLIENTS" \
+                    '(.inbounds[] | select(.tag == "vless-reality") | .settings.clients) = $clients' \
+                    /tmp/config.json > /etc/xray/config.json
+              env:
+                - name: PRIVATE_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: xray-credentials
+                      key: private-key
+                - name: SHORT_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: xray-credentials
+                      key: short-id
+              volumeMounts:
+                - name: config-template
+                  mountPath: /etc/xray-template/config.json
+                  subPath: config.json
+                - name: users
+                  mountPath: /etc/xray-template/users.json
+                  subPath: users.json
+                - name: config-rendered
+                  mountPath: /etc/xray
+          containers:
+            - name: xray
+              image: ghcr.io/xtls/xray-core:latest
+              args: ["run", "-c", "/etc/xray/config.json"]
+              ports:
+                - containerPort: 443
+                  hostPort: 443
+                  protocol: TCP
+              volumeMounts:
+                - name: config-rendered
+                  mountPath: /etc/xray
+              resources:
+                requests:
+                  memory: 64Mi
+                  cpu: 50m
+                limits:
+                  memory: 128Mi
+                  cpu: 200m
+          volumes:
+            - name: config-template
+              configMap:
+                name: xray-config
+            - name: users
+              configMap:
+                name: xray-users
+            - name: config-rendered
+              emptyDir: {}
+
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: xray
+      namespace: xray
+    spec:
+      type: NodePort
+      ports:
+        - port: 443
+          targetPort: 443
+          protocol: TCP
+      selector:
+        app: xray
+

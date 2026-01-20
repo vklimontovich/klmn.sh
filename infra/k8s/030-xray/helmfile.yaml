@@ -1,0 +1,78 @@
+repositories:
+  - name: bedag
+    url: https://bedag.github.io/helm-charts
+
+releases:
+  - name: xray
+    namespace: xray
+    createNamespace: true
+    chart: bedag/raw
+    version: "2.0.0"
+    values:
+      - values.yaml.gotmpl
+
+hooks:
+  - events: ["presync"]
+    showlogs: true
+    command: "/bin/bash"
+    args:
+      - "-c"
+      - |
+        set -e
+        NS=xray
+
+        kubectl create namespace $NS --dry-run=client -o yaml | kubectl apply -f -
+
+        # Generate REALITY keypair and initial user if secret doesn't exist
+        if ! kubectl get secret xray-credentials -n $NS >/dev/null 2>&1; then
+          echo "Generating REALITY keypair and initial user..."
+
+          # Generate x25519 keypair using xray
+          KEYS=$(docker run --rm ghcr.io/xtls/xray-core:latest x25519)
+          PRIVATE_KEY=$(echo "$KEYS" | grep "Private key:" | awk '{print $3}')
+          PUBLIC_KEY=$(echo "$KEYS" | grep "Public key:" | awk '{print $3}')
+
+          # Generate UUID for admin user
+          ADMIN_UUID=$(uuidgen | tr '[:upper:]' '[:lower:]')
+
+          # Generate short ID (8 hex chars)
+          SHORT_ID=$(openssl rand -hex 4)
+
+          kubectl create secret generic xray-credentials -n $NS \
+            --from-literal=private-key="$PRIVATE_KEY" \
+            --from-literal=public-key="$PUBLIC_KEY" \
+            --from-literal=admin-uuid="$ADMIN_UUID" \
+            --from-literal=short-id="$SHORT_ID"
+
+          echo "REALITY credentials created."
+          echo "Public key: $PUBLIC_KEY"
+          echo "Short ID: $SHORT_ID"
+          echo "Admin UUID: $ADMIN_UUID"
+        else
+          echo "Secret xray-credentials already exists, skipping key generation."
+          ADMIN_UUID=$(kubectl get secret xray-credentials -n $NS -o jsonpath='{.data.admin-uuid}' | base64 -d)
+        fi
+
+        # Create users ConfigMap if it doesn't exist
+        if ! kubectl get configmap xray-users -n $NS >/dev/null 2>&1; then
+          echo "Creating xray-users ConfigMap..."
+          cat <<USERS_EOF | kubectl apply -f -
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: xray-users
+          namespace: $NS
+        data:
+          users.json: |
+            {
+              "inbounds": [{
+                "tag": "vless-reality",
+                "settings": {
+                  "clients": [
+                    {"id": "$ADMIN_UUID", "email": "admin@xray", "flow": "xtls-rprx-vision"}
+                  ]
+                }
+              }]
+            }
+        USERS_EOF
+        fi

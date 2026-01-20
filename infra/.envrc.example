@@ -1,0 +1,25 @@
+# GitHub token for GHCR registry authentication
+# Get it: https://github.com/settings/tokens -> Generate new token (classic) -> select read:packages
+export can=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# Tailscale auth key to join nodes to your tailnet
+# Get it: https://login.tailscale.com/admin/settings/keys -> Generate auth key
+# Tip: enable "Reusable" for multiple nodes, set expiry as needed
+export TAILSCALE_AUTH_KEY=tskey-auth-xxxxxxxxxxxxxxxxxxxx
+
+# Cloudflare API token for DNS management (internet-gateway operator)
+# Get it: https://dash.cloudflare.com/profile/api-tokens -> Create Token
+# Permissions needed: Zone:Read, DNS:Edit
+export CLOUDFLARE_API_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# Let's Encrypt email for SSL certificates (cert-manager)
+export LETSENCRYPT_EMAIL=your-email@example.com
+
+# GCP project ID (optional, enables PostgreSQL backups to GCS)
+# Get it: https://console.cloud.google.com/ -> select project -> copy project ID
+# export GCP_PROJECT_ID=my-project-id
+
+# GCS bucket name for PostgreSQL backups
+# Default: $GCP_PROJECT_ID-pg-backups
+# Create bucket: gsutil mb gs://$GCP_PROJECT_ID-pg-backups
+# export GCS_BACKUP_BUCKET=custom-backup-bucket

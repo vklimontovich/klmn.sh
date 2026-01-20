@@ -1,0 +1,54 @@
+---
+- name: Check if K3s is installed
+  stat:
+    path: /usr/local/bin/k3s
+  register: k3s_binary
+
+- name: Install K3s on master
+  shell: curl -sfL https://get.k3s.io | sh -s - server --cluster-init
+  when:
+    - inventory_hostname in groups['master']
+    - not k3s_binary.stat.exists
+
+- name: Get K3s token from master
+  slurp:
+    src: /var/lib/rancher/k3s/server/node-token
+  register: k3s_token_file
+  when: inventory_hostname in groups['master']
+
+- name: Set K3s token fact
+  set_fact:
+    k3s_token: "{{ hostvars[k3s_master]['k3s_token_file']['content'] | b64decode | trim }}"
+  when:
+    - inventory_hostname in groups['workers']
+    - hostvars[k3s_master]['k3s_token_file'] is defined
+
+- name: Install K3s on workers
+  shell: curl -sfL https://get.k3s.io | K3S_URL="{{ k3s_master_url }}" K3S_TOKEN="{{ k3s_token }}" sh -
+  when:
+    - inventory_hostname in groups['workers']
+    - not k3s_binary.stat.exists
+    - k3s_token is defined
+
+- name: Ensure K3s config directory exists
+  file:
+    path: /etc/rancher/k3s
+    state: directory
+    mode: "0755"
+
+- name: Configure K3s registries for GHCR
+  copy:
+    content: |
+      mirrors:
+        ghcr.io:
+          endpoint:
+            - "https://ghcr.io"
+
+      configs:
+        "ghcr.io":
+          auth:
+            password: "{{ github_token }}"
+    dest: /etc/rancher/k3s/registries.yaml
+    mode: "0600"
+  when: github_token | length > 0
+  notify: Restart K3s

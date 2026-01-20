@@ -1,0 +1,54 @@
+architecture: standalone
+
+auth:
+  existingSecret: postgresql-password
+  secretKeys:
+    adminPasswordKey: postgres-password
+    replicationPasswordKey: replication-password
+
+primary:
+  persistence:
+    enabled: true
+    storageClass: local-path
+    size: 10Gi
+
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+
+tls:
+  enabled: true
+  certificatesSecret: postgresql-tls
+  certFilename: tls.crt
+  certKeyFilename: tls.key
+
+metrics:
+  enabled: false
+
+service:
+  type: NodePort
+  nodePorts:
+    postgresql: 30432
+  annotations:
+    internet-gateway/host: "pg.klmn.sh"
+    internet-gateway/auto-dns: "true"
+    internet-gateway/ip-mode: "node-port"
+
+backup:
+  enabled: {{ env "GCP_PROJECT_ID" | default "" | ne "" }}
+  cronjob:
+    schedule: "0 2 * * *"
+    concurrencyPolicy: Forbid
+    storage:
+      size: 5Gi
+  uploadProviders:
+    google:
+      enabled: true
+      existingSecret: gcs-backup-credentials
+      secretKey: credentials.json
+      bucketName: {{ env "GCS_BACKUP_BUCKET" | default (printf "%s-pg-backups" (env "GCP_PROJECT_ID" | default "")) }}
+      objectPrefix: "postgresql-backups/"

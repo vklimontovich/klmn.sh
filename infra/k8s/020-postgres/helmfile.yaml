@@ -1,0 +1,59 @@
+repositories:
+  - name: bitnami
+    url: https://charts.bitnami.com/bitnami
+
+releases:
+  - name: postgresql
+    namespace: database
+    createNamespace: true
+    chart: bitnami/postgresql
+    version: "16.4.1"
+    values:
+      - values.yaml
+    hooks:
+      - events: ["presync"]
+        showlogs: true
+        command: "/bin/bash"
+        args:
+          - "-c"
+          - |
+            set -e
+            NS=database
+
+            kubectl create namespace $NS --dry-run=client -o yaml | kubectl apply -f -
+
+            # Password secret
+            if ! kubectl get secret postgresql-password -n $NS >/dev/null 2>&1; then
+              echo "Creating postgresql-password secret..."
+              kubectl create secret generic postgresql-password -n $NS \
+                --from-literal=postgres-password="$(openssl rand -base64 24)" \
+                --from-literal=replication-password="$(openssl rand -base64 24)"
+            fi
+
+            # TLS secret
+            if ! kubectl get secret postgresql-tls -n $NS >/dev/null 2>&1; then
+              echo "Creating postgresql-tls secret..."
+              openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+                -keyout /tmp/tls.key -out /tmp/tls.crt \
+                -subj "/CN=postgresql.database.svc.cluster.local" 2>/dev/null
+              kubectl create secret tls postgresql-tls -n $NS \
+                --cert=/tmp/tls.crt --key=/tmp/tls.key
+              rm -f /tmp/tls.key /tmp/tls.crt
+            fi
+
+            # GCS backup credentials
+            if [[ -n "${GCP_PROJECT_ID:-}" ]] && ! kubectl get secret gcs-backup-credentials -n $NS >/dev/null 2>&1; then
+              echo "Creating gcs-backup-credentials secret..."
+              SA_EMAIL="${GCS_BACKUP_SA:-postgres-backup@${GCP_PROJECT_ID}.iam.gserviceaccount.com}"
+              TMP_KEY=$(mktemp)
+              trap "rm -f $TMP_KEY" EXIT
+
+              if gcloud iam service-accounts keys create "$TMP_KEY" \
+                  --iam-account="$SA_EMAIL" --project="$GCP_PROJECT_ID" 2>/dev/null; then
+                kubectl create secret generic gcs-backup-credentials -n $NS \
+                  --from-file=credentials.json="$TMP_KEY"
+                echo "GCS credentials configured (SA: $SA_EMAIL)"
+              else
+                echo "Warning: Failed to create GCS key for $SA_EMAIL"
+              fi
+            fi
