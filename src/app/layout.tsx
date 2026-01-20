@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { headerFont, mainFont } from "@/app/fonts";
-import { PageViewAnalytics } from "@/components/PageViewAnalytics";
-
+import { AnalyticsProvider } from "@/components/AnalyticsProvider";
 
 export const metadata: Metadata = {
   title: "Vladimir Klimontovich",
@@ -17,7 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className={`${headerFont.variable} ${mainFont.variable}`}>
-        <PageViewAnalytics />
+        <AnalyticsProvider />
         {children}
       </body>
     </html>

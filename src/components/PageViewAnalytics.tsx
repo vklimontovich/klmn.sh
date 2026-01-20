@@ -1,31 +1,27 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { ClientSideContext } from "@/lib/analytics-types";
 
 function getClientSideContext(): ClientSideContext {
   const context: ClientSideContext = {};
 
-  // Document info
   if (typeof document !== "undefined") {
     context.referrer = document.referrer || undefined;
   }
 
-  // Screen info
   if (typeof screen !== "undefined") {
     context.screenWidth = screen.width;
     context.screenHeight = screen.height;
   }
 
-  // Viewport info
   if (typeof window !== "undefined") {
     context.viewportWidth = window.innerWidth;
     context.viewportHeight = window.innerHeight;
     context.devicePixelRatio = window.devicePixelRatio;
   }
 
-  // Navigator info
   if (typeof navigator !== "undefined") {
     context.language = navigator.language;
     context.languages = Array.from(navigator.languages || []);
@@ -33,7 +29,6 @@ function getClientSideContext(): ClientSideContext {
     context.doNotTrack = navigator.doNotTrack === "1";
     context.touchSupport = "ontouchstart" in window || navigator.maxTouchPoints > 0;
 
-    // Connection info
     const connection = (navigator as any).connection;
     if (connection) {
       context.connectionType = connection.effectiveType;
@@ -41,28 +36,17 @@ function getClientSideContext(): ClientSideContext {
     }
   }
 
-  // Timezone
   try {
     context.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     context.timezoneOffset = new Date().getTimezoneOffset();
   } catch {}
 
-  // Media queries
   if (typeof window !== "undefined" && window.matchMedia) {
     context.colorScheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     context.reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   }
 
   return context;
-}
-
-function getCookie(name: string): string | null {
-  const match = document.cookie.match(new RegExp(`(^| )${name}=([^;]+)`));
-  return match ? match[2] : null;
-}
-
-function deleteCookie(name: string) {
-  document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
 }
 
 export function useAnalytics() {
@@ -94,17 +78,20 @@ export function useAnalytics() {
   };
 }
 
+interface PageViewAnalyticsProps {
+  eventId: string | null;
+}
+
 // PageView is registered by middleware, this component patches it with clientSideContext
-export function PageViewAnalytics() {
+export function PageViewAnalytics({ eventId }: PageViewAnalyticsProps) {
   const analytics = useAnalytics();
   const pathname = usePathname();
+  const patchedRef = useRef<string | null>(null);
 
   // Patch pageView event with clientSideContext
   useEffect(() => {
-    const eventId = getCookie("x-analytics-event-id");
-    if (!eventId) return;
-
-    deleteCookie("x-analytics-event-id");
+    if (!eventId || patchedRef.current === eventId) return;
+    patchedRef.current = eventId;
 
     fetch("/api/event", {
       method: "PATCH",
@@ -113,7 +100,7 @@ export function PageViewAnalytics() {
     }).catch((error) => {
       console.error("Failed to patch pageView with clientSideContext:", error);
     });
-  }, [pathname]);
+  }, [eventId]);
 
   // Track link clicks
   useEffect(() => {

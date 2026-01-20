@@ -1,7 +1,15 @@
-import { NextRequest, NextResponse } from "next/server";
-import { Analytics } from "@/lib/analytics";
+import { NextRequest, NextResponse, NextFetchEvent } from "next/server";
+import { createPageViewCall } from "@/lib/internal-api-call";
 
-export async function middleware(request: NextRequest) {
+function getOrigin(request: NextRequest): string {
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const host = forwardedHost || request.headers.get("host");
+  const protocol = forwardedProto || "https";
+  return `${protocol}://${host}`;
+}
+
+export function middleware(request: NextRequest, event: NextFetchEvent) {
   const { pathname } = request.nextUrl;
 
   // Skip non-page requests
@@ -15,21 +23,13 @@ export async function middleware(request: NextRequest) {
 
   const response = NextResponse.next();
   const eventId = crypto.randomUUID();
+  const origin = getOrigin(request);
 
-  // Set cookie immediately (non-blocking)
-  response.cookies.set("x-analytics-event-id", eventId, {
-    httpOnly: false,
-    secure: request.nextUrl.protocol === "https:",
-    sameSite: "lax",
-    maxAge: 60,
-    path: "/",
-  });
+  // Set header for server components to read
+  response.headers.set("x-analytics-event-id", eventId);
 
-  // Fire and forget - don't await
-  const analytics = new Analytics(request, response);
-  analytics.registerEvent("pageView", { params: { pageUrl: pathname }, eventId }).catch((error) => {
-    console.error("Failed to register pageView:", error);
-  });
+  // Fire and forget with waitUntil
+  event.waitUntil(createPageViewCall(origin, pathname, eventId)());
 
   return response;
 }

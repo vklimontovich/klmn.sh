@@ -1,7 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Analytics } from "@/lib/analytics";
+import { Analytics, patchClientSideContext } from "@/lib/analytics";
+
+function checkInternalAuth(request: NextRequest): boolean {
+  const token = process.env.INTERNAL_CALLS_TOKEN;
+  if (!token) return true; // No token configured = no auth required
+  const headerToken = request.headers.get("x-internal-token");
+  return headerToken === token;
+}
 
 async function handleEvent(request: NextRequest) {
+  // Check internal auth for middleware calls
+  if (!checkInternalAuth(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const searchParams = request.nextUrl.searchParams;
   const type = searchParams.get("type");
 
@@ -11,6 +23,9 @@ async function handleEvent(request: NextRequest) {
 
   const paramsString = searchParams.get("params");
   const params = paramsString ? JSON.parse(paramsString) : {};
+
+  // Get event ID from header if provided
+  const eventId = request.headers.get("x-event-id") || undefined;
 
   // Parse client side context
   const cscString = searchParams.get("csc");
@@ -26,7 +41,7 @@ async function handleEvent(request: NextRequest) {
   const response = NextResponse.json({ success: true });
   const analytics = new Analytics(request, response);
 
-  const id = await analytics.registerEvent(type, { params, clientSideContext });
+  const id = await analytics.registerEvent(type, { params, clientSideContext, eventId });
 
   return NextResponse.json({ success: true, id }, { headers: response.headers });
 }
@@ -62,7 +77,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "clientSideContext is required" }, { status: 400 });
     }
 
-    const success = await Analytics.patchClientSideContext(id, clientSideContext);
+    const success = await patchClientSideContext(id, clientSideContext);
     return NextResponse.json({ success });
   } catch (error) {
     console.error("Failed to patch event:", error);
