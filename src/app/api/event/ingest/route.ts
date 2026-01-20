@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod/v4";
 import { prisma } from "@/lib/server/prisma";
 import { UAParser } from "ua-parser-js";
-import { omit } from "lodash";
 import { getLocationForIp } from "@/lib/server/maxmind";
 import { ClientSideContextSchema } from "@/lib/analytics-types";
 
@@ -94,7 +93,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Get event ID from header or generate new one
+    const eventId = request.headers.get("x-event-id") || crypto.randomUUID();
+
+    // Remove pageUrl from params if present
+    const { pageUrl: _pageUrl, ...paramsWithoutPageUrl } = payload.params || {};
+    // Remove ua from userAgent
+    const { ua: _ua, ...userAgentWithoutUa } = userAgent;
+
     const data = {
+      id: eventId,
       timestamp,
       eventType: payload.eventType,
       ip,
@@ -102,20 +110,18 @@ export async function POST(request: NextRequest) {
       pageUrl: payload.pageUrl || null,
       anonymousUserId: payload.anonId || null,
       hostname: payload.hostname || null,
-      params: payload.params ? (omit(payload.params, "pageUrl") as any) : null,
+      params: Object.keys(paramsWithoutPageUrl).length > 0 ? (paramsWithoutPageUrl as any) : null,
       userAgentHeader: payload.userAgentString || null,
-      userAgent: omit(userAgent, "ua") as any,
+      userAgent: userAgentWithoutUa as any,
       requestHeaders: requestHeaders as any,
       userId: payload.userId || null,
       userTraits: payload.userTraits as any || null,
       clientSideContext: payload.clientSideContext as any || null,
     };
 
-    const event = await prisma.analyticsEvents.create({
-      data,
-    });
+    await prisma.analyticsEvents.create({ data });
 
-    return NextResponse.json({ success: true, id: event.id });
+    return NextResponse.json({ success: true, id: eventId });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Invalid payload", details: error.issues }, { status: 400 });

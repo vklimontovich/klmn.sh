@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/server/prisma";
 import { NextRequest, NextResponse } from "next/server";
-import { omit } from "lodash";
 import { UAParser } from "ua-parser-js";
 import { getLocationForIp } from "@/lib/server/maxmind";
 import { ClientSideContext, ClientSideContextSchema } from "@/lib/analytics-types";
@@ -50,9 +49,13 @@ export class Analytics {
 
   async registerEvent(
     eventName: string,
-    params: Record<string, any> = {},
-    clientSideContext?: ClientSideContext | null
+    opts: {
+      params?: Record<string, any>;
+      clientSideContext?: ClientSideContext | null;
+      eventId?: string;
+    } = {}
   ) {
+    const { params = {}, clientSideContext, eventId } = opts;
     const ip = getClientIp(this.request);
     const origin = getOrigin(this.request);
     const hostname = origin.replace(/^https?:\/\//, "");
@@ -71,7 +74,7 @@ export class Analytics {
     // Skip bot traffic
     if (location?.isBot) {
       console.log("Skipping bot traffic from IP:", ip);
-      return;
+      return null;
     }
 
     // Get or generate anonymous user ID
@@ -113,24 +116,24 @@ export class Analytics {
       }
     }
 
+    const id = eventId || crypto.randomUUID();
     const data = {
+      id,
       eventType: eventName,
       ip,
       location: location as any,
       pageUrl: params.pageUrl || null,
       anonymousUserId,
       hostname,
-      params: omit(params, "pageUrl") as any,
+      params: (({ pageUrl: _, ...rest }) => rest)(params) as any,
       userAgentHeader,
-      userAgent: omit(userAgent, "ua") as any,
+      userAgent: (({ ua: _, ...rest }) => rest)(userAgent) as any,
       requestHeaders: requestHeaders as any,
       clientSideContext: validatedCsc as any,
     };
     console.log(`[analytics] ${eventName} ${params.pageUrl || hostname} ${ip || "no-ip"}`);
-    const event = await prisma.analyticsEvents.create({
-      data: data,
-    });
-    return event.id;
+    await prisma.analyticsEvents.create({ data });
+    return id;
   }
 
   static async patchClientSideContext(id: string, clientSideContext: ClientSideContext): Promise<boolean> {

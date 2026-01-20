@@ -26,7 +26,7 @@ async function handleEvent(request: NextRequest) {
   const response = NextResponse.json({ success: true });
   const analytics = new Analytics(request, response);
 
-  const id = await analytics.registerEvent(type, params, clientSideContext);
+  const id = await analytics.registerEvent(type, { params, clientSideContext });
 
   return NextResponse.json({ success: true, id }, { headers: response.headers });
 }
