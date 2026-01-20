@@ -4,6 +4,11 @@ import { prisma } from "@/lib/server/prisma";
 import { UAParser } from "ua-parser-js";
 import { omit } from "lodash";
 import { getLocationForIp } from "@/lib/server/maxmind";
+import { ClientSideContextSchema } from "@/lib/analytics-types";
+
+const UserTraitsSchema = z.object({
+  email: z.string().optional(),
+});
 
 const IngestPayloadSchema = z.object({
   time: z.string().optional(),
@@ -15,7 +20,14 @@ const IngestPayloadSchema = z.object({
   params: z.record(z.string(), z.any()).optional(),
   userAgentString: z.string().optional(),
   requestHeaders: z.union([z.string(), z.record(z.string(), z.string())]).optional(),
+  userId: z.string().optional(),
+  userTraits: UserTraitsSchema.optional(),
+  clientSideContext: ClientSideContextSchema.optional(),
 });
+
+export async function GET() {
+  return NextResponse.json(z.toJSONSchema(IngestPayloadSchema));
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -82,6 +94,9 @@ export async function POST(request: NextRequest) {
       userAgentHeader: payload.userAgentString || null,
       userAgent: omit(userAgent, "ua") as any,
       requestHeaders: requestHeaders as any,
+      userId: payload.userId || null,
+      userTraits: payload.userTraits as any || null,
+      clientSideContext: payload.clientSideContext as any || null,
     };
 
     await prisma.analyticsEvents.create({
