@@ -1,0 +1,118 @@
+resources:
+  # RBAC: Allow xray-app service account to manage configmaps in mtproxy namespace
+  - apiVersion: rbac.authorization.k8s.io/v1
+    kind: Role
+    metadata:
+      name: mtproxy-configmap-manager
+      namespace: mtproxy
+    rules:
+      - apiGroups: [""]
+        resources: ["configmaps"]
+        verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  - apiVersion: rbac.authorization.k8s.io/v1
+    kind: RoleBinding
+    metadata:
+      name: xray-app-mtproxy-access
+      namespace: mtproxy
+    subjects:
+      - kind: ServiceAccount
+        name: xray-app
+        namespace: xray
+    roleRef:
+      kind: Role
+      name: mtproxy-configmap-manager
+      apiGroup: rbac.authorization.k8s.io
+
+  - apiVersion: apps/v1
+    kind: DaemonSet
+    metadata:
+      name: mtproxy
+      namespace: mtproxy
+    spec:
+      selector:
+        matchLabels:
+          app: mtproxy
+      template:
+        metadata:
+          labels:
+            app: mtproxy
+        spec:
+          nodeSelector:
+            node-role: vpn-node
+          tolerations:
+            - key: "node.kubernetes.io/unschedulable"
+              operator: "Exists"
+              effect: "NoSchedule"
+            - key: "dedicated"
+              operator: "Equal"
+              value: "reserved"
+              effect: "NoSchedule"
+          initContainers:
+            - name: extract-secrets
+              image: python:3.12-alpine
+              command:
+                - python
+                - -c
+                - |
+                  import json
+                  with open('/config/users.json') as f:
+                      data = json.load(f)
+                  # MTProxy supports max 16 secrets
+                  users = data['users'][:16]
+                  secrets = ','.join(user['secret'] for user in users)
+                  with open('/secrets/SECRET', 'w') as f:
+                      f.write(secrets)
+              volumeMounts:
+                - name: config
+                  mountPath: /config
+                - name: secrets
+                  mountPath: /secrets
+          containers:
+            - name: mtproxy
+              image: telegrammessenger/proxy:latest
+              env:
+                - name: SECRET
+                  value: "placeholder"
+              command:
+                - sh
+                - -c
+                - |
+                  export SECRET=$(cat /secrets/SECRET)
+                  exec /run.sh
+              ports:
+                - containerPort: 443
+                  hostPort: 8443
+                  protocol: TCP
+                  name: mtproxy
+              volumeMounts:
+                - name: secrets
+                  mountPath: /secrets
+              resources:
+                requests:
+                  memory: 64Mi
+                  cpu: 50m
+                limits:
+                  memory: 128Mi
+                  cpu: 200m
+          volumes:
+            - name: config
+              configMap:
+                name: mtproxy-users
+            - name: secrets
+              emptyDir: {}
+
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: mtproxy
+      namespace: mtproxy
+    spec:
+      type: NodePort
+      ports:
+        - port: 8443
+          targetPort: 443
+          protocol: TCP
+          name: mtproxy
+      selector:
+        app: mtproxy

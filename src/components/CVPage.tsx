@@ -8,7 +8,7 @@ import { cvCopy } from "@/content/cv";
 import Image from "next/image";
 import iponwebLogo from "../../public/iponweb.png";
 import { HiddenField } from "@/components/HiddenField";
-import { useAnalytics } from "@/components/PageViewAnalytics";
+import { useNextlytics } from "@nextlytics/core/client";
 
 function formatPeriod(period: [Date, Date | null]): { display: string; duration: string } {
   const [start, end] = period;
@@ -52,11 +52,10 @@ const JobLogo: React.FC<{ logo: string | React.ReactNode; alt: string }> = ({ lo
 };
 
 export function CVPage() {
-  const analytics = useAnalytics();
+  const analytics = useNextlytics();
 
   const handleDownloadPDF = async () => {
-    // Track download event
-    await analytics.trackEvent("resume.download");
+    await analytics.sendEvent("resume.download");
     window.print();
   };
 

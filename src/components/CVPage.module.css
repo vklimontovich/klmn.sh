@@ -1,147 +1,143 @@
 .cvContent {
-    @apply leading-normal;
+  @apply leading-normal;
 }
 
 .cvContent :global(.cvKeyword) {
-    @apply font-medium px-0.5;
-    /*background: linear-gradient(to bottom, transparent 60%, rgba(0, 0, 0, 0.04) 60%);*/
+  @apply font-medium px-0.5;
+  /*background: linear-gradient(to bottom, transparent 60%, rgba(0, 0, 0, 0.04) 60%);*/
 }
 
 .cvContent h1 {
-    @apply text-4xl leading-tight;
+  @apply text-4xl leading-tight;
 }
 
 .cvContent h2 {
-    @apply text-2xl mb-2 mt-0 font-bold tracking-tight;
+  @apply text-2xl mb-2 mt-0 font-bold tracking-tight;
 }
 
 .cvContent p {
-    @apply mt-0 mb-2;
+  @apply mt-0 mb-2;
 }
 
 .cvContent ul {
-    @apply mt-0 mb-0;
+  @apply mt-0 mb-0;
 }
 
 .cvContent li {
-    @apply mb-0.5;
+  @apply mb-0.5;
 }
 
-
 .experienceItem {
-    @apply border border-gray-200 rounded-lg p-4 bg-gray-50 shadow-sm transition-all;
-    page-break-inside: avoid;
-    break-inside: avoid;
+  @apply border border-gray-200 rounded-lg p-4 bg-gray-50 shadow-sm transition-all;
+  page-break-inside: avoid;
+  break-inside: avoid;
 }
 
 .experienceItem:hover {
-    @apply shadow-md border-gray-300;
+  @apply shadow-md border-gray-300;
 }
 
 .introSection p {
-    @apply pb-0 mb-0;
+  @apply pb-0 mb-0;
 }
 
 .introSection {
-    @apply shadow-sm border border-gray-300 pl-4 rounded-lg p-5  bg-gradient-to-b from-gray-50 to-white;
+  @apply shadow-sm border border-gray-300 pl-4 rounded-lg p-5  bg-gradient-to-b from-gray-50 to-white;
 }
 
 .expertiseSection {
-    @apply shadow-sm rounded-lg p-5 border border-gray-200 bg-gradient-to-b from-gray-50 to-white;
+  @apply shadow-sm rounded-lg p-5 border border-gray-200 bg-gradient-to-b from-gray-50 to-white;
 }
 
 .exerienceList {
-    @apply gap-6 mt-2;
+  @apply gap-6 mt-2;
 }
 
 /*.cvContent .jobDescription p, .cvContent .jobDescription ul {*/
 /*    @apply text-sm*/
 /*}*/
 
-
 /* Print styles */
 @media print {
-    .cvContent :global(.cvKeyword) {
-        background: linear-gradient(to bottom, transparent 60%, rgba(0, 0, 0, 0.12) 60%) !important;
-        
-    }
+  .cvContent :global(.cvKeyword) {
+    background: linear-gradient(to bottom, transparent 60%, rgba(0, 0, 0, 0.12) 60%) !important;
+  }
 
-    .introSection {
-        @apply bg-transparent p-2 shadow-none border-0 !important;
-    }
+  .introSection {
+    @apply bg-transparent p-2 shadow-none border-0 !important;
+  }
 
-    .expertiseSection {
-        @apply bg-transparent p-2 shadow-none border-0 !important;
-    }
+  .expertiseSection {
+    @apply bg-transparent p-2 shadow-none border-0 !important;
+  }
 
-    .exerienceList {
-        @apply gap-2 mt-0 !important;
-    }
+  .exerienceList {
+    @apply gap-2 mt-0 !important;
+  }
 
-    .downloadButton {
-        @apply hidden !important;
-    }
+  .downloadButton {
+    @apply hidden !important;
+  }
 
-    .cvContent hr {
-        @apply mb-2 !important;
-    }
+  .cvContent hr {
+    @apply mb-2 !important;
+  }
 
-    .cvContent ul {
-        @apply leading-tight text-sm !important;
-    }
+  .cvContent ul {
+    @apply leading-tight text-sm !important;
+  }
 
-    .cvContent p {
-        @apply leading-tight text-sm mb-1 !important;
-    }
+  .cvContent p {
+    @apply leading-tight text-sm mb-1 !important;
+  }
 
-    .cvContent h1 {
-        @apply leading-tight text-3xl mb-1 !important;
-    }
+  .cvContent h1 {
+    @apply leading-tight text-3xl mb-1 !important;
+  }
 
-    .cvContent h2 {
-        @apply leading-tight text-lg mb-2 !important;
-    }
+  .cvContent h2 {
+    @apply leading-tight text-lg mb-2 !important;
+  }
 
-    .cvContent li {
-        @apply mb-0 !important;
-    }
+  .cvContent li {
+    @apply mb-0 !important;
+  }
 
-    .cvContent a {
-        @apply text-black no-underline !important;
-    }
+  .cvContent a {
+    @apply text-black no-underline !important;
+  }
 
-    .cvContent svg {
-        @apply align-middle inline-block mr-1 !important;
-    }
+  .cvContent svg {
+    @apply align-middle inline-block mr-1 !important;
+  }
 
-    .experienceItem {
-        @apply bg-transparent shadow-none border-0 p-2 !important;
-        page-break-inside: avoid;
-        break-inside: avoid;
-    }
+  .experienceItem {
+    @apply bg-transparent shadow-none border-0 p-2 !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
 
-    .cvContainer {
-        @apply m-0 p-0 !important;
-    }
-    
+  .cvContainer {
+    @apply m-0 p-0 !important;
+  }
 
-    .headerSection > div {
-        @apply flex-row justify-start !important;
-    }
+  .headerSection > div {
+    @apply flex-row justify-start !important;
+  }
 
-    .headerSection .flex {
-        @apply flex-nowrap gap-3 !important;
-    }
+  .headerSection .flex {
+    @apply flex-nowrap gap-3 !important;
+  }
 
-    .linkedinLink {
-        @apply hidden !important;
-    }
+  .linkedinLink {
+    @apply hidden !important;
+  }
 
-    .jobTitle {
-        @apply block !important;
-    }
+  .jobTitle {
+    @apply block !important;
+  }
 
-    .jobSeparator {
-        @apply inline !important;
-    }
+  .jobSeparator {
+    @apply inline !important;
+  }
 }

@@ -1,0 +1,23 @@
+repositories:
+  - name: bedag
+    url: https://bedag.github.io/helm-charts
+
+releases:
+  - name: mtproxy
+    namespace: mtproxy
+    createNamespace: true
+    chart: bedag/raw
+    version: "2.0.0"
+    values:
+      - values.yaml.gotmpl
+
+hooks:
+  - events: ["presync"]
+    showlogs: true
+    command: "/bin/bash"
+    args:
+      - "-c"
+      - |
+        set -e
+        NS=mtproxy
+        kubectl create namespace $NS --dry-run=client -o yaml | kubectl apply -f -

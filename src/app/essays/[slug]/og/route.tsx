@@ -14,12 +14,7 @@ export async function GET(request: NextRequest) {
     (
       <div tw="flex flex-col relative">
         <span tw="absolute" style={{ zIndex: 100, top: "80px", left: "80px" }}>
-          <img
-            width="180"
-            height="180"
-            src={headshotPng}
-            style={{ borderRadius: 90 }}
-          />
+          <img width="180" height="180" src={headshotPng} style={{ borderRadius: 90 }} />
         </span>
         <span
           tw="absolute flex flex-col"

@@ -39,7 +39,7 @@ service:
     internet-gateway/ip-mode: "node-port"
 
 backup:
-  enabled: {{ env "GCP_PROJECT_ID" | default "" | ne "" }}
+  enabled: { { env "GCP_PROJECT_ID" | default "" | ne "" } }
   cronjob:
     schedule: "0 2 * * *"
     concurrencyPolicy: Forbid
@@ -50,5 +50,5 @@ backup:
       enabled: true
       existingSecret: gcs-backup-credentials
       secretKey: credentials.json
-      bucketName: {{ env "GCS_BACKUP_BUCKET" | default (printf "%s-pg-backups" (env "GCP_PROJECT_ID" | default "")) }}
+      bucketName: { { env "GCS_BACKUP_BUCKET" | default (printf "%s-pg-backups" (env "GCP_PROJECT_ID" | default "")) } }
       objectPrefix: "postgresql-backups/"

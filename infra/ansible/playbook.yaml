@@ -4,8 +4,9 @@
   vars:
     github_token: "{{ lookup('env', 'GITHUB_TOKEN') }}"
     tailscale_auth_key: "{{ lookup('env', 'TAILSCALE_AUTH_KEY') }}"
-    k3s_master: "master.klmn.sh"
+    k3s_master: "fatman.klmn.sh"
     k3s_master_url: "https://{{ k3s_master }}:6443"
+    k3s_version: "v1.32.3+k3s1"
 
   tasks:
     - name: Install Docker
@@ -29,6 +30,20 @@
           tags: [k3s]
       tags: [k3s]
 
+    - name: Configure firewall
+      ansible.builtin.include_tasks:
+        file: tasks/firewall.yaml
+        apply:
+          tags: [firewall]
+      tags: [firewall]
+
+    - name: Setup xray via Docker (out of tailnet)
+      ansible.builtin.include_tasks:
+        file: tasks/xray-docker.yaml
+        apply:
+          tags: [xray]
+      tags: [xray]
+
   handlers:
     - name: Reload docker socket
       systemd:
@@ -47,3 +62,9 @@
         name: k3s-agent
         state: restarted
       when: inventory_hostname in groups['workers']
+
+    - name: Restart xray container
+      community.docker.docker_container:
+        name: xray
+        state: started
+        restart: true

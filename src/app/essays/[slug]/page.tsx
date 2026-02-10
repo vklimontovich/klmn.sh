@@ -23,10 +23,9 @@ export async function generateMetadata(props: any) {
         url: `/essays/${essay.slug}/og`,
         alt: essay.title,
       },
-    }
+    },
   };
 }
-
 
 async function getEssayContent(essay: NotionEssay | MdxEssay) {
   if ("mdxFile" in essay && essay.mdxFile) {

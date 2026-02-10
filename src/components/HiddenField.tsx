@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, ReactNode, useRef } from "react";
-import { useAnalytics } from "./PageViewAnalytics";
+import { useNextlytics } from "@nextlytics/core/client";
 
 interface HiddenFieldProps {
   eventName: string;
@@ -12,7 +12,7 @@ interface HiddenFieldProps {
 export function HiddenField({ eventName, actualValue, placeholder }: HiddenFieldProps) {
   const [isRevealed, setIsRevealed] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const analytics = useAnalytics();
+  const analytics = useNextlytics();
 
   const handleReveal = async () => {
     setIsRevealed(true);
@@ -26,17 +26,13 @@ export function HiddenField({ eventName, actualValue, placeholder }: HiddenField
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
-    await analytics.trackEvent(eventName, {
-      signal: abortController.signal,
-    });
+    await analytics.sendEvent(eventName);
   };
 
   return (
     <div className="relative">
       {/* Actual value - always rendered but invisible when not revealed */}
-      <div className={isRevealed ? "visible" : "invisible"}>
-        {actualValue}
-      </div>
+      <div className={isRevealed ? "visible" : "invisible"}>{actualValue}</div>
 
       {/* Placeholder button - positioned absolutely on top when not revealed */}
       {!isRevealed && (

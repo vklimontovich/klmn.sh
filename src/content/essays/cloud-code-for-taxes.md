@@ -8,7 +8,7 @@ problem for you. It's worth the money.
 
 But this year I wanted to try something different. Claude Code is a coding tool. I wondered if it could
 handle tax preparation too?
-
+cla
 ## The Problem
 
 My tax situation is not simple. I file jointly with my wife. I have W-2 income plus consulting

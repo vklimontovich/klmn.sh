@@ -1,0 +1,146 @@
+---
+# Only run on out_of_tailnet nodes
+- name: Skip xray-docker for tailnet nodes
+  meta: end_host
+  when: not (out_of_tailnet | default(false))
+
+# Fetch xray secrets from k8s cluster via k3s master
+- name: Get xray private key from k8s
+  delegate_to: "{{ k3s_master }}"
+  shell: k3s kubectl get secret xray-credentials -n xray -o jsonpath='{.data.private-key}' | base64 -d
+  register: xray_private_key_result
+  changed_when: false
+  become: true
+
+- name: Get xray short id from k8s
+  delegate_to: "{{ k3s_master }}"
+  shell: k3s kubectl get secret xray-credentials -n xray -o jsonpath='{.data.short-id}' | base64 -d
+  register: xray_short_id_result
+  changed_when: false
+  become: true
+
+- name: Get xray users from k8s
+  delegate_to: "{{ k3s_master }}"
+  shell: k3s kubectl get configmap xray-users -n xray -o jsonpath='{.data.users\.json}'
+  register: xray_users_result
+  changed_when: false
+  become: true
+
+- name: Set xray facts
+  set_fact:
+    xray_private_key: "{{ xray_private_key_result.stdout }}"
+    xray_short_id: "{{ xray_short_id_result.stdout }}"
+    xray_users: "{{ (xray_users_result.stdout | from_json).inbounds[0].settings.clients }}"
+
+- name: Create xray config directory
+  file:
+    path: /etc/xray
+    state: directory
+    mode: "0755"
+
+- name: Copy xray config template
+  copy:
+    content: |
+      {
+        "log": {
+          "loglevel": "info"
+        },
+        "api": {
+          "tag": "api",
+          "services": ["StatsService"]
+        },
+        "stats": {},
+        "policy": {
+          "levels": {
+            "0": {
+              "statsUserUplink": true,
+              "statsUserDownlink": true
+            }
+          },
+          "system": {
+            "statsInboundUplink": true,
+            "statsInboundDownlink": true,
+            "statsOutboundUplink": true,
+            "statsOutboundDownlink": true
+          }
+        },
+        "inbounds": [
+          {
+            "tag": "api",
+            "listen": "127.0.0.1",
+            "port": 10085,
+            "protocol": "dokodemo-door",
+            "settings": {
+              "address": "127.0.0.1"
+            }
+          },
+          {
+            "tag": "vless-reality",
+            "port": 443,
+            "protocol": "vless",
+            "settings": {
+              "clients": {{ xray_users | to_json }},
+              "decryption": "none"
+            },
+            "streamSettings": {
+              "network": "tcp",
+              "security": "reality",
+              "realitySettings": {
+                "show": false,
+                "dest": "www.microsoft.com:443",
+                "xver": 0,
+                "serverNames": ["www.microsoft.com", "aihero.dev", "investing.com", "catholic.com"],
+                "privateKey": "{{ xray_private_key }}",
+                "shortIds": ["{{ xray_short_id }}"]
+              }
+            },
+            "sniffing": {
+              "enabled": true,
+              "destOverride": ["http", "tls", "quic"]
+            }
+          }
+        ],
+        "outbounds": [
+          {
+            "protocol": "freedom",
+            "tag": "direct"
+          },
+          {
+            "protocol": "blackhole",
+            "tag": "block"
+          },
+          {
+            "protocol": "blackhole",
+            "tag": "api"
+          }
+        ],
+        "routing": {
+          "rules": [
+            {
+              "type": "field",
+              "inboundTag": ["api"],
+              "outboundTag": "api"
+            }
+          ]
+        }
+      }
+    dest: /etc/xray/config.json
+    mode: "0600"
+  notify: Restart xray container
+
+- name: Pull xray image
+  community.docker.docker_image:
+    name: teddysun/xray
+    tag: latest
+    source: pull
+
+- name: Run xray container
+  community.docker.docker_container:
+    name: xray
+    image: teddysun/xray:latest
+    state: started
+    restart_policy: always
+    network_mode: host
+    command: ["xray", "run", "-c", "/etc/xray/config.json"]
+    volumes:
+      - /etc/xray:/etc/xray

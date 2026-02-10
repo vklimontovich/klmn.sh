@@ -1,40 +1,99 @@
 ---
+# Skip k3s for out_of_tailnet nodes
+- name: Skip k3s for out of tailnet nodes
+  meta: end_host
+  when: out_of_tailnet | default(false)
+
+# Get Tailscale IP for node-ip configuration
+- name: Get Tailscale IPv4 address
+  command: tailscale ip -4
+  register: tailscale_ip_result
+  changed_when: false
+
+- name: Set Tailscale IP fact
+  set_fact:
+    tailscale_ip: "{{ tailscale_ip_result.stdout | trim }}"
+
 - name: Check if K3s is installed
   stat:
     path: /usr/local/bin/k3s
   register: k3s_binary
 
-- name: Install K3s on master
-  shell: curl -sfL https://get.k3s.io | sh -s - server --cluster-init
+# Get primary master's Tailscale IP for other nodes to join
+- name: Set primary master Tailscale IP fact
+  set_fact:
+    k3s_master_tailscale_ip: "{{ hostvars[k3s_master]['tailscale_ip'] }}"
+  when: hostvars[k3s_master]['tailscale_ip'] is defined
+
+# Install K3s on primary master (first node, initializes cluster)
+- name: Install K3s on primary master
+  shell: >
+    curl -sfL https://get.k3s.io |
+    INSTALL_K3S_VERSION="{{ k3s_version }}"
+    sh -s - server --cluster-init --node-ip={{ tailscale_ip }}
   when:
-    - inventory_hostname in groups['master']
+    - inventory_hostname == k3s_master
     - not k3s_binary.stat.exists
 
-- name: Get K3s token from master
+- name: Get K3s token from primary master
   slurp:
     src: /var/lib/rancher/k3s/server/node-token
   register: k3s_token_file
-  when: inventory_hostname in groups['master']
+  when: inventory_hostname == k3s_master
 
 - name: Set K3s token fact
   set_fact:
     k3s_token: "{{ hostvars[k3s_master]['k3s_token_file']['content'] | b64decode | trim }}"
   when:
-    - inventory_hostname in groups['workers']
+    - inventory_hostname != k3s_master
     - hostvars[k3s_master]['k3s_token_file'] is defined
 
+# Install K3s on additional masters (join existing cluster as server)
+- name: Install K3s on additional masters
+  shell: >
+    curl -sfL https://get.k3s.io |
+    INSTALL_K3S_VERSION="{{ k3s_version }}"
+    K3S_URL="https://{{ k3s_master_tailscale_ip }}:6443"
+    K3S_TOKEN="{{ k3s_token }}"
+    sh -s - server --node-ip={{ tailscale_ip }}
+  when:
+    - inventory_hostname in groups['master']
+    - inventory_hostname != k3s_master
+    - not k3s_binary.stat.exists
+    - k3s_token is defined
+    - k3s_master_tailscale_ip is defined
+
+# Install K3s on workers (join as agent) - only for tailnet workers
 - name: Install K3s on workers
-  shell: curl -sfL https://get.k3s.io | K3S_URL="{{ k3s_master_url }}" K3S_TOKEN="{{ k3s_token }}" sh -
+  shell: >
+    curl -sfL https://get.k3s.io |
+    INSTALL_K3S_VERSION="{{ k3s_version }}"
+    K3S_URL="https://{{ k3s_master_tailscale_ip }}:6443"
+    K3S_TOKEN="{{ k3s_token }}"
+    sh -s - agent --node-ip={{ tailscale_ip }}
   when:
     - inventory_hostname in groups['workers']
     - not k3s_binary.stat.exists
     - k3s_token is defined
+    - k3s_master_tailscale_ip is defined
 
 - name: Ensure K3s config directory exists
   file:
     path: /etc/rancher/k3s
     state: directory
     mode: "0755"
+
+# Configure k3s to use Tailscale IP for node communication
+- name: Configure K3s to use Tailscale IP
+  copy:
+    content: |
+      node-ip: "{{ tailscale_ip }}"
+      flannel-iface: "tailscale0"
+      disable:
+        - servicelb
+    dest: /etc/rancher/k3s/config.yaml
+    mode: "0644"
+  notify: Restart K3s
 
 - name: Configure K3s registries for GHCR
   copy:

@@ -11,65 +11,26 @@ datasource db {
   directUrl = env("DATABASE_DIRECT_URL")
 }
 
-model Log {
-  id        String   @id @default(uuid())
-  timestamp DateTime @default(now())
-  namespace String
-  body      Json
-}
+model Analytics {
+  eventId         String    @id @map("event_id")
+  parentEventId   String?   @map("parent_event_id")
+  timestamp       DateTime? @db.Timestamptz
+  type            String?
+  anonymousUserId String?   @map("anonymous_user_id")
+  userId          String?   @map("user_id")
+  userEmail       String?   @map("user_email")
+  userName        String?   @map("user_name")
+  host            String?
+  method          String?
+  path            String?
+  ip              String?   @db.Inet
+  referer         String?
+  userAgent       String?   @map("user_agent")
+  locale          String?
+  serverContext   Json?     @map("server_context")
+  clientContext   Json?     @map("client_context")
+  userTraits      Json?     @map("user_traits")
+  properties      Json?
 
-model TextMessageRoute {
-  id          String   @id @default(uuid())
-  createdAt   DateTime @default(now())
-  source      String
-  type        String
-  destination String
-}
-
-model BlockedEmails {
-  id        String    @id @default(uuid())
-  email     String
-  blockedAt DateTime? @default(now())
-}
-
-model EmailForwardingStat {
-  id             String   @id @default(uuid())
-  email          String
-  dayStart       DateTime
-  forwardedCount Int
-}
-
-model TaskQueue {
-  id          String    @id @default(uuid())
-  createdAt   DateTime  @default(now())
-  completedAt DateTime?
-  error       String?
-  key         String?
-  task        Json
-}
-
-model AnalyticsEvents {
-  id                String   @id @default(uuid())
-  timestamp         DateTime @default(now())
-  eventType         String
-  ip                String?
-  location          Json?
-  pageUrl           String?
-  anonymousUserId   String?
-  hostname          String?
-  params            Json?
-  userAgentHeader   String?
-  userAgent         Json?
-  requestHeaders    Json?
-  userId            String?
-  userTraits        Json?
-  clientSideContext Json?
-}
-
-model MaxMindCache {
-  id        String   @id @default(uuid())
-  ip        String   @unique
-  createdAt DateTime @default(now())
-  expiresAt DateTime
-  location  Json
+  @@map("analytics")
 }

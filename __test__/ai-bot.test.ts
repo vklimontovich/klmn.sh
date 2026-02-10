@@ -3,8 +3,7 @@ import { botCommanderTest, testEnvBotToken } from "@/lib/server/bots/commander";
 import { createAiCommander } from "@/lib/server/bots/ai-bot";
 
 test("test AI Bot", async () => {
-
-  console.log(`testEnvBotToken: ${process.env.TEST_BOT_TOKEN}`)
+  console.log(`testEnvBotToken: ${process.env.TEST_BOT_TOKEN}`);
 
   if (!testEnvBotToken) {
     console.log(`Skipping test message, no bot token provided`);
@@ -17,5 +16,9 @@ test("test AI Bot", async () => {
   //
   // console.log(await tester.testMessage({ text: "/start" }));
 
-  console.log(await tester.testMessage({ text: "Write me an example markdown document that contains as many elements of markdown as possible" }));
+  console.log(
+    await tester.testMessage({
+      text: "Write me an example markdown document that contains as many elements of markdown as possible",
+    })
+  );
 });

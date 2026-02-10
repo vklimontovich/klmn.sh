@@ -59,7 +59,7 @@
   file:
     path: /etc/systemd/system/docker.socket.d
     state: directory
-    mode: '0755'
+    mode: "0755"
 
 - name: Allow sudo users to access docker
   copy:
@@ -67,5 +67,5 @@
       [Socket]
       SocketGroup=sudo
     dest: /etc/systemd/system/docker.socket.d/override.conf
-    mode: '0644'
+    mode: "0644"
   notify: Reload docker socket
