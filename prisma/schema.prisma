@@ -1,0 +1,36 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_DIRECT_URL")
+}
+
+model Analytics {
+  timestamp       DateTime @db.Timestamptz()
+  type            String
+  host            String
+  path            String
+  method          String
+  user_id         String?
+  anonymous_user_id String?
+  user_email      String?
+  user_name       String?
+  ip              String?  @db.Inet
+  referer         String?
+  user_agent      String?
+  locale          String?
+  event_id        String   @id
+  parent_event_id String?
+  server_context  Json?    @db.JsonB
+  client_context  Json?    @db.JsonB
+  user_traits     Json?    @db.JsonB
+  properties      Json?    @db.JsonB
+
+  @@index([timestamp(sort: Desc)])
+  @@index([type])
+  @@index([user_id])
+  @@map("analytics")
+}
