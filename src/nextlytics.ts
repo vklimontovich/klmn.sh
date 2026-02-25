@@ -17,7 +17,7 @@ if (process.env.JITSU_WRITE_KEY) {
       writeKey: process.env.JITSU_WRITE_KEY!,
       host: "https://ingest.g.jitsu.com",
     }),
-    ingestPolicy: "on-client-event",
+    pageViewDelivery: "on-page-load",
   });
 }
 if (process.env.GA_MEASUREMENT_ID && process.env.GA_API_SECRET) {
@@ -29,4 +29,4 @@ if (process.env.GA_MEASUREMENT_ID && process.env.GA_API_SECRET) {
   );
 }
 
-export const { middleware, handlers, analytics } = Nextlytics({ backends, callbacks: {} });
+export const { middleware, analytics, NextlyticsServer } = Nextlytics({ backends, callbacks: {} });

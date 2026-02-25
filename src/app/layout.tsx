@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { headerFont, mainFont } from "@/app/fonts";
-import { NextlyticsServer } from "@nextlytics/core/server";
+import { NextlyticsServer } from "@/nextlytics";
 
 export const metadata: Metadata = {
   title: "Vladimir Klimontovich",
