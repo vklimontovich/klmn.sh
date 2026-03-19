@@ -6,6 +6,7 @@ on:
     paths:
       - infra/k8s/040-mtproxy/proxy/**
       - infra/k8s/040-mtproxy/Dockerfile
+      - .github/workflows/mtproxy.yaml
 
 jobs:
   build:

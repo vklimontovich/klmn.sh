@@ -1,4 +1,31 @@
 resources:
+  - apiVersion: rbac.authorization.k8s.io/v1
+    kind: Role
+    metadata:
+      name: xray-app-configmap-writer
+      namespace: mtproxy
+    rules:
+      - apiGroups: [""]
+        resources: ["configmaps"]
+        verbs: ["get", "create", "update", "patch"]
+      - apiGroups: ["apps"]
+        resources: ["deployments", "daemonsets"]
+        verbs: ["get", "list", "patch"]
+
+  - apiVersion: rbac.authorization.k8s.io/v1
+    kind: RoleBinding
+    metadata:
+      name: xray-app-configmap-writer
+      namespace: mtproxy
+    subjects:
+      - kind: ServiceAccount
+        name: xray-app
+        namespace: xray
+    roleRef:
+      kind: Role
+      name: xray-app-configmap-writer
+      apiGroup: rbac.authorization.k8s.io
+
   - apiVersion: apps/v1
     kind: DaemonSet
     metadata:
@@ -28,6 +55,7 @@ resources:
           containers:
             - name: mtproxy
               image: ghcr.io/vklimontovich/mtproxy:latest
+              imagePullPolicy: Always
               resources:
                 requests:
                   cpu: 10m
@@ -35,6 +63,12 @@ resources:
                 limits:
                   cpu: 500m
                   memory: 64Mi
+              env:
+                - name: ADMIN_INTERFACE_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: mtproxy-admin-token
+                      key: token
               volumeMounts:
                 - name: config
                   mountPath: /config

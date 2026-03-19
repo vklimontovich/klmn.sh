@@ -10,16 +10,18 @@ export TAILSCALE_AUTH_KEY=tskey-auth-xxxxxxxxxxxxxxxxxxxx
 # Cloudflare API token for DNS management (internet-gateway operator)
 # Get it: https://dash.cloudflare.com/profile/api-tokens -> Create Token
 # Permissions needed: Zone:Read, DNS:Edit
-export CLOUDFLARE_API_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+export CLOUDFLARE_API_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 # Let's Encrypt email for SSL certificates (cert-manager)
 export LETSENCRYPT_EMAIL=your-email@example.com
 
-# GCP project ID (optional, enables PostgreSQL backups to GCS)
-# Get it: https://console.cloud.google.com/ -> select project -> copy project ID
-# export GCP_PROJECT_ID=my-project-id
+# GCP service account key JSON (optional, enables PostgreSQL backups to GCS)
+# Create SA: gcloud iam service-accounts create postgres-backup
+# Create key: gcloud iam service-accounts keys create key.json --iam-account=postgres-backup@PROJECT.iam.gserviceaccount.com
+# export GCP_SERVICE_ACCOUNT_KEY='{"type":"service_account","project_id":"...","private_key":"..."}'
 
 # GCS bucket name for PostgreSQL backups
-# Default: $GCP_PROJECT_ID-pg-backups
-# Create bucket: gsutil mb gs://$GCP_PROJECT_ID-pg-backups
-# export GCS_BACKUP_BUCKET=custom-backup-bucket
+# export GCS_BACKUP_BUCKET=backups.pg.klmn.sh
+
+# MTProxy stats endpoint auth token (X-Admin-Token header), comma-separated for multiple
+export ADMIN_INTERFACE_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
