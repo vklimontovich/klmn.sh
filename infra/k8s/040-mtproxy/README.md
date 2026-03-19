@@ -1,136 +1,92 @@
 # MTProxy Kubernetes Deployment
 
-Telegram MTProxy runs as a DaemonSet on VPN nodes (same as xray) using port 8443.
+N independent MTProxy servers run as DaemonSets on VPN nodes, each on its own port (8443+i).
+Secrets are fetched from an HTTP provisioner at pod startup.
 
 ## Architecture
 
-- **Image**: `telegrammessenger/proxy:latest` (official Telegram image)
-- **Port**: 8443 (container internal 443 mapped to hostPort 8443)
-- **Deployment**: DaemonSet on nodes with `node-role: vpn-node`
-- **Multi-user**: ConfigMap-based user management with init container extracting secrets
-- **User Limit**: **Maximum 16 users** (MTProxy limitation - only first 16 users from ConfigMap are used)
-- **RBAC**: Allows `xray-app` service account to manage ConfigMaps in `mtproxy` namespace
+- **N DaemonSets** (`mtproxy-0`…`mtproxy-N-1`), one pod per VPN node each
+- Each pod runs `telegrammessenger/proxy:latest` on containerPort 443, hostPort `8443+i`
+- **N** defaults to 10, controlled by `MTPROXY_COUNT` env var
+- Init container fetches the per-instance secret from a provisioner; falls back to a random secret
+
+## Provisioner Protocol
+
+At startup, the init container calls:
+
+```
+GET ${MT_PROXY_PROVISIONER}?origin=${NODE_NAME}&index=${i}
+X-Auth-Key: ${MT_PROXY_AUTH_KEY}
+```
+
+Expected response (200 OK):
+
+```json
+{ "secret": "0123456789abcdef0123456789abcdef" }
+```
+
+`secret` must be 32 hex characters (16 bytes). On any error (non-200, timeout, parse failure,
+missing field), the init container generates a random secret via `/dev/urandom` and logs it
+to stderr.
 
 ## Prerequisites
 
-The deployment automatically creates:
-- `mtproxy` namespace
-- RBAC Role and RoleBinding for `xray-app` service account
-
-Before deploying, you must create the `mtproxy-users` ConfigMap in the `mtproxy` namespace.
-
-### ConfigMap Structure
-
-```yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: mtproxy-users
-  namespace: mtproxy
-data:
-  users.json: |
-    {
-      "users": [
-        {
-          "secret": "0123456789abcdef0123456789abcdef",
-          "name": "user@email.com",
-          "description": "User Name / user_id"
-        }
-      ]
-    }
-```
-
-### Creating Initial ConfigMap
+One-time manual bootstrap (before first deploy):
 
 ```bash
-# Generate a random secret (32 hex characters)
-ADMIN_SECRET=$(head -c 16 /dev/urandom | xxd -ps -c 16)
-
-# Create namespace
 kubectl create namespace mtproxy --dry-run=client -o yaml | kubectl apply -f -
-
-# Create ConfigMap with initial user
-kubectl create configmap mtproxy-users -n mtproxy \
-  --from-literal=users.json="{\"users\":[{\"secret\":\"$ADMIN_SECRET\",\"name\":\"admin\",\"description\":\"Admin user\"}]}"
-
-echo "Admin secret: $ADMIN_SECRET"
+kubectl create secret generic mtproxy-auth-key -n mtproxy --from-literal=auth-key=<YOUR_KEY>
 ```
+
+The presync hook will fail with a clear message if `mtproxy-auth-key` is missing.
+
+## Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `MTPROXY_COUNT` | `10` | Number of MTProxy instances (DaemonSets) |
+| `MT_PROXY_PROVISIONER` | `""` | HTTP endpoint for secret provisioning |
 
 ## Deployment
 
-From the `infra/` directory:
-
 ```bash
+export MT_PROXY_PROVISIONER=https://your-provisioner/secret
 ./apply.sh k8s mtproxy
 ```
 
 ## Verification
 
 ```bash
-# Check pod status
+# Check all pods
 kubectl get pods -n mtproxy -o wide
 
-# Check logs
-kubectl logs -n mtproxy -l app=mtproxy
+# Check init container logs (provisioner result or random secret notice)
+kubectl logs -n mtproxy <pod> -c extract-secret
 
-# Verify ConfigMap
-kubectl get configmap mtproxy-users -n mtproxy -o jsonpath='{.data.users\.json}' | jq
+# Test ports (replace NODE_IP)
+for port in $(seq 8443 8452); do nc -zv $NODE_IP $port; done
 ```
 
-## Getting Connection Info
+## Connection Links
 
 ```bash
-# Get node IP
-NODE_IP=$(kubectl get nodes -l node-role=vpn-node -o jsonpath='{.items[0].status.addresses[?(@.type=="ExternalIP")].address}')
+NODE_IP=$(kubectl get nodes -l node-role=vpn-node \
+  -o jsonpath='{.items[0].status.addresses[?(@.type=="ExternalIP")].address}')
 
-# Get a user secret
-SECRET=$(kubectl get configmap mtproxy-users -n mtproxy -o jsonpath='{.data.users\.json}' | jq -r '.users[0].secret')
+# Get secret for instance i (e.g. i=0)
+SECRET=$(kubectl exec -n mtproxy \
+  $(kubectl get pod -n mtproxy -l app=mtproxy-0 -o name | head -1) \
+  -- cat /secrets/SECRET)
 
-# Generate Telegram link
 echo "https://t.me/proxy?server=$NODE_IP&port=8443&secret=$SECRET"
-```
-
-## Adding Users
-
-User management should be handled by an external tool that updates the ConfigMap. Manual process:
-
-```bash
-# Generate new secret
-USER_SECRET=$(head -c 16 /dev/urandom | xxd -ps -c 16)
-USER_NAME="alice"
-USER_DESC="Alice's access"
-
-# Update ConfigMap
-kubectl get configmap mtproxy-users -n mtproxy -o json | \
-  jq --arg secret "$USER_SECRET" --arg name "$USER_NAME" --arg desc "$USER_DESC" \
-    '.data."users.json" = (.data."users.json" | fromjson | .users += [{"secret": $secret, "name": $name, "description": $desc}] | tojson)' | \
-  kubectl apply -f -
-
-# Restart pods
-kubectl rollout restart daemonset/mtproxy -n mtproxy
-
-# Display connection info
-NODE_IP=$(kubectl get nodes -l node-role=vpn-node -o jsonpath='{.items[0].status.addresses[?(@.type=="ExternalIP")].address}')
-echo "New user: $USER_NAME"
-echo "Secret: $USER_SECRET"
-echo "Link: https://t.me/proxy?server=$NODE_IP&port=8443&secret=$USER_SECRET"
 ```
 
 ## Firewall
 
-Port 8443 has been added to firewall rules in `infra/ansible/tasks/firewall.yaml`. Run ansible playbook to apply:
+Port range `8443:8452` (or `8443:8443+N-1`) is opened in `infra/ansible/tasks/firewall.yaml`.
+The range is derived from `MTPROXY_COUNT` (same env var). Apply with:
 
 ```bash
 cd infra/ansible
 ansible-playbook -i inventory.yaml playbook.yaml --tags firewall
 ```
-
-## Testing Connection
-
-```bash
-# Test port connectivity
-NODE_IP=$(kubectl get nodes -l node-role=vpn-node -o jsonpath='{.items[0].status.addresses[?(@.type=="ExternalIP")].address}')
-nc -zv $NODE_IP 8443
-```
-
-Open the generated Telegram link on a mobile device with Telegram installed to test the proxy.

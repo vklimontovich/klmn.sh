@@ -11,13 +11,4 @@ releases:
     values:
       - values.yaml.gotmpl
 
-hooks:
-  - events: ["presync"]
-    showlogs: true
-    command: "/bin/bash"
-    args:
-      - "-c"
-      - |
-        set -e
-        NS=mtproxy
-        kubectl create namespace $NS --dry-run=client -o yaml | kubectl apply -f -
+

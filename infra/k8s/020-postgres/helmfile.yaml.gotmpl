@@ -1,6 +1,8 @@
 repositories:
   - name: bitnami
     url: https://charts.bitnami.com/bitnami
+  - name: bedag
+    url: https://bedag.github.io/helm-charts
 
 releases:
   - name: postgresql
@@ -9,7 +11,7 @@ releases:
     chart: bitnami/postgresql
     version: "16.4.1"
     values:
-      - values.yaml
+      - values.yaml.gotmpl
     hooks:
       - events: ["presync"]
         showlogs: true
@@ -30,17 +32,6 @@ releases:
                 --from-literal=replication-password="$(openssl rand -base64 24)"
             fi
 
-            # TLS secret
-            if ! kubectl get secret postgresql-tls -n $NS >/dev/null 2>&1; then
-              echo "Creating postgresql-tls secret..."
-              openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
-                -keyout /tmp/tls.key -out /tmp/tls.crt \
-                -subj "/CN=postgresql.database.svc.cluster.local" 2>/dev/null
-              kubectl create secret tls postgresql-tls -n $NS \
-                --cert=/tmp/tls.crt --key=/tmp/tls.key
-              rm -f /tmp/tls.key /tmp/tls.crt
-            fi
-
             # GCS backup credentials
             if [[ -n "${GCP_PROJECT_ID:-}" ]] && ! kubectl get secret gcs-backup-credentials -n $NS >/dev/null 2>&1; then
               echo "Creating gcs-backup-credentials secret..."
@@ -57,3 +48,25 @@ releases:
                 echo "Warning: Failed to create GCS key for $SA_EMAIL"
               fi
             fi
+
+  - name: postgresql-internal
+    namespace: database
+    chart: bedag/raw
+    version: "2.0.0"
+    needs:
+      - database/postgresql
+    values:
+      - resources:
+          - apiVersion: v1
+            kind: Service
+            metadata:
+              name: postgresql-internal
+            spec:
+              type: ClusterIP
+              selector:
+                app.kubernetes.io/instance: postgresql
+                app.kubernetes.io/component: primary
+              ports:
+                - port: 5432
+                  targetPort: 5432
+                  protocol: TCP
