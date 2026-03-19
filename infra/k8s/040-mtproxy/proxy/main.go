@@ -24,10 +24,14 @@ import (
 	networkv2 "github.com/9seconds/mtg/v2/network/v2"
 )
 
-const (
-	configPath  = "/config/secrets.txt"
-	statsPort   = "9090"
-)
+const configPath = "/config/secrets.txt"
+
+func getenv(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
 
 // allowAll implements mtglib.IPBlocklist allowing every IP.
 type allowAll struct{}
@@ -142,8 +146,22 @@ func startProxy(ctx context.Context, e entry, c *counter, ntw mtglib.Network, ar
 	return proxy.Serve(ln)
 }
 
-func serveStats(counters map[string]*counter) http.HandlerFunc {
+func serveStats(counters map[string]*counter, tokens []string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if len(tokens) > 0 {
+			provided := r.Header.Get("X-Admin-Token")
+			ok := false
+			for _, t := range tokens {
+				if provided == t {
+					ok = true
+					break
+				}
+			}
+			if !ok {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
+		}
 		type userStats struct {
 			BytesReceived int64 `json:"bytesReceived"`
 			BytesSent     int64 `json:"bytesSent"`
@@ -181,6 +199,16 @@ func main() {
 		counters[e.userID] = &counter{}
 	}
 
+	statsPort := getenv("STATS_PORT", "63090")
+	var tokens []string
+	if raw := os.Getenv("ADMIN_INTERFACE_TOKEN"); raw != "" {
+		for _, t := range strings.Split(raw, ",") {
+			if t = strings.TrimSpace(t); t != "" {
+				tokens = append(tokens, t)
+			}
+		}
+	}
+
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer cancel()
 
@@ -189,7 +217,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		srv := &http.Server{Addr: "0.0.0.0:" + statsPort, Handler: serveStats(counters)}
+		srv := &http.Server{Addr: "0.0.0.0:" + statsPort, Handler: serveStats(counters, tokens)}
 		go func() {
 			<-ctx.Done()
 			srv.Shutdown(context.Background())
