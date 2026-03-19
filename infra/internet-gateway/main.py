@@ -11,12 +11,14 @@ Internet Gateway Operator
 
 Watches Kubernetes services for annotations and:
 - Updates Cloudflare DNS records (if auto-dns: true)
-- Creates Ingress with TLS via cert-manager (if auto-https: true)
+- Creates Ingress with TLS via cert-manager (if auto-cert: true, protocol: http)
+- Creates cert-manager Certificate CRs (if auto-cert: true, protocol: tcp)
 
 Required annotations on Service:
-  internet-gateway/host: subdomain.klmn.sh
+  internet-gateway/host: subdomain.klmn.sh (comma-separated for multiple)
   internet-gateway/auto-dns: "true"       # optional
-  internet-gateway/auto-https: "true"     # optional
+  internet-gateway/auto-cert: "true"      # optional
+  internet-gateway/protocol: "http|tcp"   # optional, default: http
   internet-gateway/ip-mode: "node-port"   # optional, auto-detect node IPs
 
 Environment variables (from secrets):
@@ -42,7 +44,8 @@ log = logging.getLogger(__name__)
 # Annotation keys
 ANN_HOST = "internet-gateway/host"
 ANN_AUTO_DNS = "internet-gateway/auto-dns"
-ANN_AUTO_HTTPS = "internet-gateway/auto-https"
+ANN_AUTO_CERT = "internet-gateway/auto-cert"
+ANN_PROTOCOL = "internet-gateway/protocol"  # "http" (default) or "tcp"
 ANN_IP_MODE = "internet-gateway/ip-mode"  # "node-port" to auto-detect node IPs
 
 # Cert-manager issuer name (must exist in cluster)
@@ -53,9 +56,10 @@ CLUSTER_ISSUER = os.getenv("CLUSTER_ISSUER", "letsencrypt-prod")
 class ServiceConfig:
     name: str
     namespace: str
-    host: str
+    hosts: list[str]
     auto_dns: bool
-    auto_https: bool
+    auto_cert: bool
+    protocol: str  # "http" or "tcp"
     ip_mode: str | None  # "node-port" or None (for LoadBalancer)
     external_ips: list[str]  # Can have multiple IPs for round-robin DNS
     port: int
@@ -64,12 +68,14 @@ class ServiceConfig:
 def parse_service(svc: client.V1Service, pod_node_ips: list[str]) -> ServiceConfig | None:
     """Parse service annotations and extract config."""
     annotations = svc.metadata.annotations or {}
-    host = annotations.get(ANN_HOST)
-    if not host:
+    host_value = annotations.get(ANN_HOST)
+    if not host_value:
         return None
+    hosts = [h.strip() for h in host_value.split(",")]
 
     auto_dns = annotations.get(ANN_AUTO_DNS, "").lower() == "true"
-    auto_https = annotations.get(ANN_AUTO_HTTPS, "").lower() == "true"
+    auto_cert = annotations.get(ANN_AUTO_CERT, "").lower() == "true"
+    protocol = annotations.get(ANN_PROTOCOL, "http").lower()
     ip_mode = annotations.get(ANN_IP_MODE)
 
     external_ips: list[str] = []
@@ -94,9 +100,10 @@ def parse_service(svc: client.V1Service, pod_node_ips: list[str]) -> ServiceConf
     return ServiceConfig(
         name=svc.metadata.name,
         namespace=svc.metadata.namespace,
-        host=host,
+        hosts=hosts,
         auto_dns=auto_dns,
-        auto_https=auto_https,
+        auto_cert=auto_cert,
+        protocol=protocol,
         ip_mode=ip_mode,
         external_ips=external_ips,
         port=port,
@@ -216,7 +223,35 @@ class IngressManager:
     def upsert_ingress(self, cfg: ServiceConfig) -> bool:
         """Create or update Ingress with TLS."""
         ingress_name = self._ingress_name(cfg.name)
-        secret_name = f"{cfg.host.replace('.', '-')}-tls"
+
+        tls = [
+            client.V1IngressTLS(
+                hosts=[host],
+                secret_name=f"{host.replace('.', '-')}-tls",
+            )
+            for host in cfg.hosts
+        ]
+        backend = client.V1IngressBackend(
+            service=client.V1IngressServiceBackend(
+                name=cfg.name,
+                port=client.V1ServiceBackendPort(number=cfg.port),
+            )
+        )
+        rules = [
+            client.V1IngressRule(
+                host=host,
+                http=client.V1HTTPIngressRuleValue(
+                    paths=[
+                        client.V1HTTPIngressPath(
+                            path="/",
+                            path_type="Prefix",
+                            backend=backend,
+                        )
+                    ]
+                ),
+            )
+            for host in cfg.hosts
+        ]
 
         ingress = client.V1Ingress(
             api_version="networking.k8s.io/v1",
@@ -227,6 +262,7 @@ class IngressManager:
                 annotations={
                     "cert-manager.io/cluster-issuer": CLUSTER_ISSUER,
                     "nginx.ingress.kubernetes.io/ssl-redirect": "true",
+                    "nginx.ingress.kubernetes.io/proxy-body-size": "50m",
                 },
                 labels={
                     "app.kubernetes.io/managed-by": "internet-gateway",
@@ -234,31 +270,8 @@ class IngressManager:
             ),
             spec=client.V1IngressSpec(
                 ingress_class_name="nginx",
-                tls=[
-                    client.V1IngressTLS(
-                        hosts=[cfg.host],
-                        secret_name=secret_name,
-                    )
-                ],
-                rules=[
-                    client.V1IngressRule(
-                        host=cfg.host,
-                        http=client.V1HTTPIngressRuleValue(
-                            paths=[
-                                client.V1HTTPIngressPath(
-                                    path="/",
-                                    path_type="Prefix",
-                                    backend=client.V1IngressBackend(
-                                        service=client.V1IngressServiceBackend(
-                                            name=cfg.name,
-                                            port=client.V1ServiceBackendPort(number=cfg.port),
-                                        )
-                                    ),
-                                )
-                            ]
-                        ),
-                    )
-                ],
+                tls=tls,
+                rules=rules,
             ),
         )
 
@@ -268,11 +281,11 @@ class IngressManager:
                 self.api.replace_namespaced_ingress(
                     name=ingress_name, namespace=cfg.namespace, body=ingress
                 )
-                log.info(f"Updated Ingress {cfg.namespace}/{ingress_name} for {cfg.host}")
+                log.info(f"Updated Ingress {cfg.namespace}/{ingress_name} for {cfg.hosts}")
             except client.exceptions.ApiException as e:
                 if e.status == 404:
                     self.api.create_namespaced_ingress(namespace=cfg.namespace, body=ingress)
-                    log.info(f"Created Ingress {cfg.namespace}/{ingress_name} for {cfg.host}")
+                    log.info(f"Created Ingress {cfg.namespace}/{ingress_name} for {cfg.hosts}")
                 else:
                     raise
             return True
@@ -294,6 +307,76 @@ class IngressManager:
             return False
 
 
+class CertificateManager:
+    """Manages cert-manager Certificate CRs for TCP services."""
+
+    def __init__(self, custom_api: client.CustomObjectsApi):
+        self.api = custom_api
+
+    def _upsert_one_certificate(self, host: str, namespace: str, svc_name: str) -> bool:
+        """Create or update a single cert-manager Certificate CR."""
+        name = f"{host.replace('.', '-')}-tls"
+        cert_body = {
+            "apiVersion": "cert-manager.io/v1",
+            "kind": "Certificate",
+            "metadata": {
+                "name": name,
+                "namespace": namespace,
+                "labels": {"app.kubernetes.io/managed-by": "internet-gateway"},
+            },
+            "spec": {
+                "secretName": name,
+                "issuerRef": {"name": CLUSTER_ISSUER, "kind": "ClusterIssuer"},
+                "dnsNames": [host],
+            },
+        }
+        try:
+            try:
+                existing = self.api.get_namespaced_custom_object(
+                    "cert-manager.io", "v1", namespace, "certificates", name
+                )
+                cert_body["metadata"]["resourceVersion"] = existing["metadata"]["resourceVersion"]
+                self.api.replace_namespaced_custom_object(
+                    "cert-manager.io", "v1", namespace, "certificates", name, cert_body
+                )
+                log.info(f"Updated Certificate {namespace}/{name}")
+            except client.exceptions.ApiException as e:
+                if e.status == 404:
+                    self.api.create_namespaced_custom_object(
+                        "cert-manager.io", "v1", namespace, "certificates", cert_body
+                    )
+                    log.info(f"Created Certificate {namespace}/{name}")
+                else:
+                    raise
+            return True
+        except Exception as e:
+            log.error(f"Failed to upsert Certificate for {svc_name}/{host}: {e}")
+            return False
+
+    def upsert_certificate(self, cfg: ServiceConfig) -> bool:
+        """Create or update cert-manager Certificate CRs for all hosts."""
+        ok = True
+        for host in cfg.hosts:
+            if not self._upsert_one_certificate(host, cfg.namespace, cfg.name):
+                ok = False
+        return ok
+
+    def delete_certificate(self, host: str, namespace: str) -> bool:
+        """Delete a cert-manager Certificate CR."""
+        cert_name = f"{host.replace('.', '-')}-tls"
+        try:
+            self.api.delete_namespaced_custom_object(
+                "cert-manager.io", "v1", namespace, "certificates", cert_name
+            )
+            log.info(f"Deleted Certificate {namespace}/{cert_name}")
+            return True
+        except client.exceptions.ApiException as e:
+            if e.status == 404:
+                return True
+            log.error(f"Failed to delete Certificate {cert_name}: {e}")
+            return False
+
+
 class Operator:
     """Main operator loop."""
 
@@ -311,6 +394,7 @@ class Operator:
         self.custom_api = client.CustomObjectsApi()
         self.dns = CloudflareDNS()
         self.ingress = IngressManager(self.networking_api)
+        self.certificates = CertificateManager(self.custom_api)
         self.managed: dict[str, ServiceConfig] = {}  # key: namespace/name
         self._node_ip_map: dict[str, str] = {}  # node_name -> ip
         self._has_cert_manager = False
@@ -326,7 +410,7 @@ class Operator:
         except client.exceptions.ApiException as e:
             if e.status == 404:
                 self._has_cert_manager = False
-                log.warning("cert-manager: not installed. auto-https will not work.")
+                log.warning("cert-manager: not installed. auto-cert will not work.")
                 log.warning("  Install: helm install cert-manager jetstack/cert-manager --set crds.enabled=true")
             else:
                 raise
@@ -342,11 +426,11 @@ class Operator:
                 log.info("ingress-nginx: installed")
             else:
                 self._has_ingress_nginx = False
-                log.warning("ingress-nginx: not running. auto-https will not work.")
+                log.warning("ingress-nginx: not running. auto-cert for HTTP will not work.")
         except client.exceptions.ApiException as e:
             if e.status == 404:
                 self._has_ingress_nginx = False
-                log.warning("ingress-nginx: not installed. auto-https will not work.")
+                log.warning("ingress-nginx: not installed. auto-cert for HTTP will not work.")
                 log.warning("  Install: helm install ingress-nginx ingress-nginx/ingress-nginx")
             else:
                 raise
@@ -426,15 +510,21 @@ class Operator:
             if key in self.managed:
                 cfg = self.managed.pop(key)
                 log.info(f"Service {key} deleted, cleaning up")
-                if cfg.auto_dns:
-                    self.dns.delete_records(cfg.host)
-                if cfg.auto_https:
+                for host in cfg.hosts:
+                    if cfg.auto_dns:
+                        self.dns.delete_records(host)
+                    if cfg.auto_cert and cfg.protocol == "tcp":
+                        self.certificates.delete_certificate(host, cfg.namespace)
+                if cfg.auto_cert and cfg.protocol != "tcp":
                     self.ingress.delete_ingress(cfg.name, cfg.namespace)
             return
 
         annotations = svc.metadata.annotations or {}
-        # For auto-https, use ingress controller IPs; for node-port, use pod node IPs
-        if annotations.get(ANN_AUTO_HTTPS, "").lower() == "true":
+        protocol = annotations.get(ANN_PROTOCOL, "http").lower()
+
+        # For auto-cert + http, use ingress controller IPs
+        # For tcp or node-port, use pod node IPs
+        if annotations.get(ANN_AUTO_CERT, "").lower() == "true" and protocol == "http":
             external_ips = self._get_ingress_controller_ips()
         elif annotations.get(ANN_IP_MODE) == "node-port":
             external_ips = self._get_pod_node_ips(svc)
@@ -446,9 +536,12 @@ class Operator:
             if key in self.managed:
                 old_cfg = self.managed.pop(key)
                 log.info(f"Service {key} annotations removed, cleaning up")
-                if old_cfg.auto_dns:
-                    self.dns.delete_records(old_cfg.host)
-                if old_cfg.auto_https:
+                for host in old_cfg.hosts:
+                    if old_cfg.auto_dns:
+                        self.dns.delete_records(host)
+                    if old_cfg.auto_cert and old_cfg.protocol == "tcp":
+                        self.certificates.delete_certificate(host, old_cfg.namespace)
+                if old_cfg.auto_cert and old_cfg.protocol != "tcp":
                     self.ingress.delete_ingress(old_cfg.name, old_cfg.namespace)
             return
 
@@ -457,17 +550,25 @@ class Operator:
             if not cfg.external_ips:
                 log.warning(f"Service {key} has auto-dns but no IPs (check ip-mode or LoadBalancer status)")
             else:
-                self.dns.upsert_records(cfg.host, cfg.external_ips)
+                for host in cfg.hosts:
+                    self.dns.upsert_records(host, cfg.external_ips)
 
-        # Handle HTTPS/Ingress
-        if cfg.auto_https:
-            if not self._has_cert_manager or not self._has_ingress_nginx:
-                log.warning(f"Service {key} has auto-https but prerequisites missing, skipping Ingress")
+        # Handle cert/ingress
+        if cfg.auto_cert:
+            if not self._has_cert_manager:
+                log.warning(f"Service {key} has auto-cert but cert-manager missing")
+            elif cfg.protocol == "tcp":
+                self.certificates.upsert_certificate(cfg)
+            elif not self._has_ingress_nginx:
+                log.warning(f"Service {key} has auto-cert+http but ingress-nginx missing")
             else:
                 self.ingress.upsert_ingress(cfg)
 
         self.managed[key] = cfg
-        log.info(f"Processed service {key}: host={cfg.host}, ips={cfg.external_ips}, dns={cfg.auto_dns}, https={cfg.auto_https}")
+        log.info(
+            f"Processed service {key}: hosts={cfg.hosts}, ips={cfg.external_ips}, "
+            f"dns={cfg.auto_dns}, cert={cfg.auto_cert}, protocol={cfg.protocol}"
+        )
 
     def run(self):
         """Main watch loop with reconnection."""

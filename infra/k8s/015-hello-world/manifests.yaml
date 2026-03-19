@@ -62,7 +62,7 @@ metadata:
   annotations:
     internet-gateway/host: "hello.klmn.sh"
     internet-gateway/auto-dns: "true"
-    internet-gateway/auto-https: "true"
+    internet-gateway/auto-cert: "true"
     internet-gateway/ip-mode: "node-port"
 spec:
   type: ClusterIP

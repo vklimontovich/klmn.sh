@@ -2,7 +2,8 @@
 
 Kubernetes operator that watches services for annotations and automatically:
 - Updates Cloudflare DNS records
-- Creates Ingress resources with TLS certificates via cert-manager
+- Creates Ingress resources with TLS certificates via cert-manager (HTTP)
+- Creates cert-manager Certificate CRs for non-HTTP services (TCP)
 
 ## Prerequisites
 
@@ -64,9 +65,10 @@ kind: Service
 metadata:
   name: my-app
   annotations:
-    internet-gateway/host: "app.klmn.sh"      # Required: hostname
+    internet-gateway/host: "app.klmn.sh"      # Required: hostname (comma-separated for multiple)
     internet-gateway/auto-dns: "true"         # Optional: update Cloudflare DNS
-    internet-gateway/auto-https: "true"       # Optional: create Ingress with TLS
+    internet-gateway/auto-cert: "true"        # Optional: TLS via cert-manager
+    internet-gateway/protocol: "http"         # Optional: http (default) or tcp
 spec:
   type: LoadBalancer  # Required for auto-dns
   ports:
@@ -80,21 +82,22 @@ spec:
 
 | Annotation | Required | Description |
 |------------|----------|-------------|
-| `internet-gateway/host` | Yes | Hostname where service will be available |
+| `internet-gateway/host` | Yes | Hostname(s), comma-separated for multiple (e.g. `"a.org,b.org"`) |
 | `internet-gateway/auto-dns` | No | If `true`, creates/updates Cloudflare A record |
-| `internet-gateway/auto-https` | No | If `true`, creates Ingress with TLS via cert-manager |
+| `internet-gateway/auto-cert` | No | If `true`, manages TLS via cert-manager |
+| `internet-gateway/protocol` | No | `http` (default) — creates Ingress; `tcp` — creates Certificate CR |
 | `internet-gateway/ip-mode` | No | `node-port` to auto-detect node IPs (creates round-robin DNS) |
 
 ### Requirements
 
 - For `auto-dns`: Service must be `type: LoadBalancer` with an external IP
-- For `auto-https`: nginx-ingress and cert-manager must be installed
+- For `auto-cert` + `protocol: http`: nginx-ingress and cert-manager must be installed
+- For `auto-cert` + `protocol: tcp`: cert-manager must be installed
 
 ### TCP services (PostgreSQL, Redis, etc.)
 
-For non-HTTP services, use `auto-dns` only (without `auto-https`). The service handles its own TLS.
-
-**Option 1: NodePort** (auto-detects node IPs, creates round-robin DNS)
+For non-HTTP services, use `protocol: tcp` with `auto-cert` to get a cert-manager
+Certificate CR (Let's Encrypt). The service mounts the resulting TLS secret directly.
 
 ```yaml
 service:
@@ -104,22 +107,12 @@ service:
   annotations:
     internet-gateway/host: "pg.klmn.sh"
     internet-gateway/auto-dns: "true"
+    internet-gateway/auto-cert: "true"
+    internet-gateway/protocol: "tcp"
     internet-gateway/ip-mode: "node-port"
 ```
 
 Connect: `psql "host=pg.klmn.sh port=30432 sslmode=require"`
-
-**Option 2: LoadBalancer** (if you have MetalLB or cloud provider)
-
-```yaml
-service:
-  type: LoadBalancer
-  annotations:
-    internet-gateway/host: "pg.klmn.sh"
-    internet-gateway/auto-dns: "true"
-```
-
-Connect: `psql "host=pg.klmn.sh sslmode=require"`
 
 ## Running the operator
 

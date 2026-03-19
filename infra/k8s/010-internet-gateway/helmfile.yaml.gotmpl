@@ -50,6 +50,14 @@ releases:
                 privateKeySecretRef:
                   name: letsencrypt-prod
                 solvers:
+                  - dns01:
+                      cloudflare:
+                        apiTokenSecretRef:
+                          name: cloudflare-credentials
+                          key: api-token
+                    selector:
+                      dnsZones:
+                        - klmn.sh
                   - http01:
                       ingress:
                         class: nginx
@@ -88,6 +96,9 @@ releases:
               - apiGroups: ["cert-manager.io"]
                 resources: ["clusterissuers"]
                 verbs: ["get", "list"]
+              - apiGroups: ["cert-manager.io"]
+                resources: ["certificates"]
+                verbs: ["get", "list", "create", "update", "delete"]
 
           - apiVersion: rbac.authorization.k8s.io/v1
             kind: ClusterRoleBinding
@@ -152,10 +163,16 @@ hooks:
 
         kubectl create namespace $NS --dry-run=client -o yaml | kubectl apply -f -
 
-        # Create Cloudflare secret
-        if [[ -n "${CLOUDFLARE_API_KEY:-}" ]]; then
+        # Create Cloudflare secret for operator
+        if [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]]; then
           kubectl create secret generic cloudflare-credentials -n $NS \
-            --from-literal=CLOUDFLARE_API_KEY="$CLOUDFLARE_API_KEY" \
+            --from-literal=CLOUDFLARE_API_KEY="$CLOUDFLARE_API_TOKEN" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          # Also create in cert-manager namespace for DNS-01 solver
+          kubectl create namespace cert-manager --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create secret generic cloudflare-credentials -n cert-manager \
+            --from-literal=api-token="$CLOUDFLARE_API_TOKEN" \
             --dry-run=client -o yaml | kubectl apply -f -
         fi
 
