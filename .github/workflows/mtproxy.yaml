@@ -29,6 +29,5 @@ jobs:
           context: infra/k8s/040-mtproxy
           push: true
           tags: ghcr.io/vklimontovich/mtproxy:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          no-cache: true
           platforms: linux/amd64,linux/arm64
