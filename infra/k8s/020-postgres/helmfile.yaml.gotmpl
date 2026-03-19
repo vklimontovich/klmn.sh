@@ -9,7 +9,7 @@ releases:
     namespace: database
     createNamespace: true
     chart: bitnami/postgresql
-    version: "16.4.1"
+    version: "18.5.6"
     values:
       - values.yaml.gotmpl
     hooks:
@@ -32,22 +32,25 @@ releases:
                 --from-literal=replication-password="$(openssl rand -base64 24)"
             fi
 
-            # GCS backup credentials
-            if [[ -n "${GCP_PROJECT_ID:-}" ]] && ! kubectl get secret gcs-backup-credentials -n $NS >/dev/null 2>&1; then
-              echo "Creating gcs-backup-credentials secret..."
-              SA_EMAIL="${GCS_BACKUP_SA:-postgres-backup@${GCP_PROJECT_ID}.iam.gserviceaccount.com}"
-              TMP_KEY=$(mktemp)
-              trap "rm -f $TMP_KEY" EXIT
-
-              if gcloud iam service-accounts keys create "$TMP_KEY" \
-                  --iam-account="$SA_EMAIL" --project="$GCP_PROJECT_ID" 2>/dev/null; then
-                kubectl create secret generic gcs-backup-credentials -n $NS \
-                  --from-file=credentials.json="$TMP_KEY"
-                echo "GCS credentials configured (SA: $SA_EMAIL)"
-              else
-                echo "Warning: Failed to create GCS key for $SA_EMAIL"
-              fi
+            # PostgREST JWT secret
+            if ! kubectl get secret postgrest-jwt -n $NS >/dev/null 2>&1; then
+              echo "Creating postgrest-jwt secret..."
+              kubectl create secret generic postgrest-jwt -n $NS \
+                --from-literal=jwt-secret="$(openssl rand -base64 32)"
             fi
+
+            # GCS backup credentials (from GCP_SERVICE_ACCOUNT_KEY env var)
+            if [[ -n "${GCP_SERVICE_ACCOUNT_KEY:-}" ]]; then
+              echo "$GCP_SERVICE_ACCOUNT_KEY" | kubectl create secret generic gcs-backup-credentials -n $NS \
+                --from-file=credentials.json=/dev/stdin \
+                --dry-run=client -o yaml | kubectl apply -f -
+              echo "GCS backup credentials configured"
+            fi
+
+            # Backup script ConfigMap
+            kubectl create configmap backup-script -n $NS \
+              --from-file=backup.py=backup.py \
+              --dry-run=client -o yaml | kubectl apply -f -
 
   - name: postgresql-internal
     namespace: database
@@ -70,3 +73,142 @@ releases:
                 - port: 5432
                   targetPort: 5432
                   protocol: TCP
+
+  - name: postgrest
+    namespace: database
+    chart: bedag/raw
+    version: "2.0.0"
+    needs:
+      - database/postgresql
+    values:
+      - resources:
+          - apiVersion: apps/v1
+            kind: Deployment
+            metadata:
+              name: postgrest
+            spec:
+              replicas: 1
+              selector:
+                matchLabels:
+                  app: postgrest
+              template:
+                metadata:
+                  labels:
+                    app: postgrest
+                spec:
+                  containers:
+                    - name: postgrest
+                      image: postgrest/postgrest:v12.2.3
+                      ports:
+                        - containerPort: 3000
+                      env:
+                        - name: PGPASSWORD
+                          valueFrom:
+                            secretKeyRef:
+                              name: postgresql-password
+                              key: postgres-password
+                        - name: PGRST_DB_URI
+                          value: "postgresql://postgres:$(PGPASSWORD)@postgresql-internal:5432/taxgent"
+                        - name: PGRST_DB_SCHEMAS
+                          value: "public"
+                        - name: PGRST_JWT_SECRET
+                          valueFrom:
+                            secretKeyRef:
+                              name: postgrest-jwt
+                              key: jwt-secret
+                        - name: PGRST_SERVER_PORT
+                          value: "3000"
+                      resources:
+                        requests:
+                          memory: 64Mi
+                          cpu: 50m
+                        limits:
+                          memory: 256Mi
+                          cpu: 500m
+
+          - apiVersion: v1
+            kind: Service
+            metadata:
+              name: postgrest
+              annotations:
+                internet-gateway/host: "pgrest-taxgent.klmn.sh"
+                internet-gateway/auto-dns: "true"
+                internet-gateway/auto-cert: "true"
+                internet-gateway/ip-mode: "node-port"
+            spec:
+              type: ClusterIP
+              selector:
+                app: postgrest
+              ports:
+                - port: 3000
+                  targetPort: 3000
+
+  - name: postgresql-backup
+    namespace: database
+    chart: bedag/raw
+    version: "2.0.0"
+    installed: {{ env "GCS_BACKUP_BUCKET" | default "" | ne "" }}
+    needs:
+      - database/postgresql
+    values:
+      - resources:
+          - apiVersion: batch/v1
+            kind: CronJob
+            metadata:
+              name: postgresql-backup
+            spec:
+              schedule: "0 2 * * *"
+              concurrencyPolicy: Forbid
+              failedJobsHistoryLimit: 3
+              successfulJobsHistoryLimit: 3
+              jobTemplate:
+                spec:
+                  backoffLimit: 1
+                  template:
+                    spec:
+                      restartPolicy: Never
+                      containers:
+                        - name: backup
+                          image: python:3.13-bookworm
+                          command: ["/bin/bash", "-c"]
+                          args:
+                            - |
+                              set -e
+                              apt-get update -qq >/dev/null 2>&1
+                              apt-get install -y -qq curl ca-certificates gnupg >/dev/null 2>&1
+                              curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /usr/share/keyrings/pgdg.gpg
+                              echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list
+                              apt-get update -qq >/dev/null 2>&1
+                              apt-get install -y -qq postgresql-client-18 >/dev/null 2>&1
+                              pip install -q --no-cache-dir google-cloud-storage >/dev/null 2>&1
+                              python3 /scripts/backup.py backup
+                          env:
+                            - name: PGPASSWORD
+                              valueFrom:
+                                secretKeyRef:
+                                  name: postgresql-password
+                                  key: postgres-password
+                            - name: DATABASE_URL
+                              value: "postgresql://postgres:$(PGPASSWORD)@postgresql:5432/postgres"
+                            - name: GCP_SERVICE_ACCOUNT_KEY
+                              valueFrom:
+                                secretKeyRef:
+                                  name: gcs-backup-credentials
+                                  key: credentials.json
+                            - name: GCS_BACKUP_BUCKET
+                              value: {{ env "GCS_BACKUP_BUCKET" | default "" | quote }}
+                          resources:
+                            requests:
+                              memory: 512Mi
+                              cpu: 200m
+                            limits:
+                              memory: 1Gi
+                              cpu: "1"
+                          volumeMounts:
+                            - name: backup-script
+                              mountPath: /scripts
+                              readOnly: true
+                      volumes:
+                        - name: backup-script
+                          configMap:
+                            name: backup-script
