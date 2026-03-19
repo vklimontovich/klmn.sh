@@ -127,9 +127,9 @@ Commands:
 Environment variables:
     GITHUB_TOKEN           GitHub token for GHCR registry (required for ansible)
     TAILSCALE_AUTH_KEY     Tailscale auth key for joining tailnet (required for ansible)
-    CLOUDFLARE_API_KEY   Cloudflare API token for DNS management (required for internet-gateway)
-    GCP_PROJECT_ID         GCP project ID (enables PostgreSQL backups if set)
-    GCS_BACKUP_BUCKET      GCS bucket name (default: \$GCP_PROJECT_ID-pg-backups)
+    CLOUDFLARE_API_TOKEN   Cloudflare API token for DNS management (required for internet-gateway)
+    GCP_SERVICE_ACCOUNT_KEY  GCP SA key JSON (enables PostgreSQL backups if set)
+    GCS_BACKUP_BUCKET      GCS bucket name for PostgreSQL backups
 
 Examples:
     ./apply.sh ansible
