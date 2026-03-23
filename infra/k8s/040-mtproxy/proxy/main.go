@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -40,15 +41,19 @@ func (allowAll) Contains(net.IP) bool { return true }
 func (allowAll) Run(time.Duration)    {}
 func (allowAll) Shutdown()            {}
 
-// counter tracks traffic for one user/secret.
+// counter tracks traffic and active connections for one user/secret.
 type counter struct {
 	received atomic.Int64
 	sent     atomic.Int64
+	active   atomic.Int64
 }
 
 // observer implements events.Observer, routing traffic to a counter.
 type observer struct {
-	c *counter
+	c         *counter
+	userID    string
+	port      string
+	startTime time.Time
 }
 
 func (o *observer) EventTraffic(e mtglib.EventTraffic) {
@@ -59,15 +64,35 @@ func (o *observer) EventTraffic(e mtglib.EventTraffic) {
 	}
 }
 
-func (o *observer) EventStart(mtglib.EventStart)                         {}
-func (o *observer) EventFinish(mtglib.EventFinish)                       {}
-func (o *observer) EventConnectedToDC(mtglib.EventConnectedToDC)         {}
-func (o *observer) EventDomainFronting(mtglib.EventDomainFronting)       {}
-func (o *observer) EventConcurrencyLimited(mtglib.EventConcurrencyLimited) {}
-func (o *observer) EventIPBlocklisted(mtglib.EventIPBlocklisted)         {}
-func (o *observer) EventReplayAttack(mtglib.EventReplayAttack)           {}
-func (o *observer) EventIPListSize(mtglib.EventIPListSize)               {}
-func (o *observer) Shutdown()                                            {}
+func (o *observer) EventStart(e mtglib.EventStart) {
+	o.startTime = time.Now()
+	o.c.active.Add(1)
+	slog.Info("connect", "userId", o.userID, "port", o.port, "clientIP", e.RemoteIP, "active", o.c.active.Load())
+}
+
+func (o *observer) EventFinish(mtglib.EventFinish) {
+	o.c.active.Add(-1)
+	slog.Info("disconnect", "userId", o.userID, "port", o.port,
+		"duration", time.Since(o.startTime).Round(time.Second),
+		"active", o.c.active.Load())
+}
+
+func (o *observer) EventConnectedToDC(e mtglib.EventConnectedToDC) {
+	slog.Info("dc", "userId", o.userID, "dc", e.DC, "dcIP", e.RemoteIP)
+}
+
+func (o *observer) EventConcurrencyLimited(mtglib.EventConcurrencyLimited) {
+	slog.Warn("concurrency limited", "userId", o.userID)
+}
+
+func (o *observer) EventReplayAttack(mtglib.EventReplayAttack) {
+	slog.Warn("replay attack", "userId", o.userID)
+}
+
+func (o *observer) EventDomainFronting(mtglib.EventDomainFronting)   {}
+func (o *observer) EventIPBlocklisted(mtglib.EventIPBlocklisted)     {}
+func (o *observer) EventIPListSize(mtglib.EventIPListSize)           {}
+func (o *observer) Shutdown()                                        {}
 
 type entry struct {
 	userID string
@@ -115,7 +140,7 @@ func startProxy(ctx context.Context, e entry, c *counter, ntw mtglib.Network, ar
 	}
 
 	stream := events.NewEventStream([]events.ObserverFactory{
-		func() events.Observer { return &observer{c: c} },
+		func() events.Observer { return &observer{c: c, userID: e.userID, port: e.port} },
 	})
 
 	proxy, err := mtglib.NewProxy(mtglib.ProxyOpts{
@@ -165,12 +190,14 @@ func serveStats(counters map[string]*counter, tokens []string) http.HandlerFunc 
 		type userStats struct {
 			BytesReceived int64 `json:"bytesReceived"`
 			BytesSent     int64 `json:"bytesSent"`
+			Active        int64 `json:"active"`
 		}
 		result := make(map[string]userStats, len(counters))
 		for userID, c := range counters {
 			result[userID] = userStats{
 				BytesReceived: c.received.Load(),
 				BytesSent:     c.sent.Load(),
+				Active:        c.active.Load(),
 			}
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -209,10 +236,35 @@ func main() {
 		}
 	}
 
+	slog.Info("starting", "proxies", len(entries), "goVersion", runtime.Version())
+
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer cancel()
 
 	var wg sync.WaitGroup
+
+	// Periodic runtime stats — goroutine count + heap to catch memory/goroutine leaks early.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				slog.Info("shutdown")
+				return
+			case <-ticker.C:
+				var ms runtime.MemStats
+				runtime.ReadMemStats(&ms)
+				slog.Info("runtime",
+					"goroutines", runtime.NumGoroutine(),
+					"heapMB", ms.HeapInuse/1024/1024,
+					"allocMB", ms.Alloc/1024/1024,
+				)
+			}
+		}
+	}()
 
 	wg.Add(1)
 	go func() {
