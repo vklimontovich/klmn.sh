@@ -152,6 +152,7 @@ func startProxy(ctx context.Context, e entry, c *counter, ntw mtglib.Network, ar
 		EventStream:     stream,
 		Logger:          logger.NewNoopLogger(),
 		Concurrency:     100,
+		IdleTimeout:     2 * time.Minute,
 	})
 	if err != nil {
 		return fmt.Errorf("new proxy: %w", err)
