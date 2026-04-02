@@ -74,13 +74,13 @@ resources:
                   mountPath: /config
                   readOnly: true
               livenessProbe:
-                tcpSocket:
-                  port: 8443
+                exec:
+                  command: ["sh", "-c", "kill -0 1"]
                 initialDelaySeconds: 10
                 periodSeconds: 30
               readinessProbe:
-                tcpSocket:
-                  port: 8443
+                exec:
+                  command: ["sh", "-c", "kill -0 1"]
                 initialDelaySeconds: 5
                 periodSeconds: 10
           volumes:
