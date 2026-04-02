@@ -136,6 +136,14 @@ def cleanup(bucket=None):
             if n >= 2:
                 break
 
+    # 1 most recent per day for days 2–6
+    for days_ago in range(2, 7):
+        target_date = today - timedelta(days=days_ago)
+        for dt, b in backups:
+            if dt.date() == target_date:
+                keep.add(b.name)
+                break
+
     # 1 most recent that's >= 7 days old
     for dt, b in backups:
         if dt.date() <= week_ago:
