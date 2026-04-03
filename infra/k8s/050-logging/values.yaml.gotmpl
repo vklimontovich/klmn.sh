@@ -1,0 +1,265 @@
+resources:
+  # ── RBAC ──────────────────────────────────────────────────────────────────
+
+  - apiVersion: v1
+    kind: ServiceAccount
+    metadata:
+      name: fluent-bit
+      namespace: logging
+
+  - apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRole
+    metadata:
+      name: fluent-bit
+    rules:
+      - apiGroups: [""]
+        resources: ["pods", "namespaces", "nodes"]
+        verbs: ["get", "list", "watch"]
+
+  - apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRoleBinding
+    metadata:
+      name: fluent-bit
+    roleRef:
+      apiGroup: rbac.authorization.k8s.io
+      kind: ClusterRole
+      name: fluent-bit
+    subjects:
+      - kind: ServiceAccount
+        name: fluent-bit
+        namespace: logging
+
+  # ── Fluent Bit agent config ───────────────────────────────────────────────
+
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: fluent-bit-agent-config
+      namespace: logging
+    data:
+      fluent-bit.conf: |
+        [SERVICE]
+            Flush        5
+            Daemon       Off
+            Log_Level    warn
+
+        [INPUT]
+            Name              tail
+            Path              /var/log/pods/*/*/*.log
+            multiline.parser  cri
+            Tag               kube.*
+            Path_Key          filepath
+            DB                /var/log/flb-state/state.db
+            Skip_Long_Lines   On
+            Ignore_Older      1d
+            Refresh_Interval  10
+
+        [OUTPUT]
+            Name    forward
+            Match   *
+            Host    log-aggregator.logging.svc.cluster.local
+            Port    24224
+
+  # ── Vector aggregator config ──────────────────────────────────────────────
+
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: vector-aggregator-config
+      namespace: logging
+    data:
+      vector.toml: |
+        [sources.from_fluent]
+        type    = "fluent"
+        address = "0.0.0.0:24224"
+
+        [transforms.extract_fields]
+        type   = "remap"
+        inputs = ["from_fluent"]
+        source = '''
+          filepath = string(.filepath) ?? ""
+          .namespace = "unknown"
+          .pod = "unknown"
+          .message = string(.log) ?? ""
+          parsed, err = parse_regex(filepath, r'/var/log/pods/(?P<ns>[^_]+)_(?P<pod>.+)_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/')
+          if err == null {
+            .namespace = string!(parsed.ns)
+            .pod = string!(parsed.pod)
+          }
+        '''
+
+        [sinks.files]
+        type   = "file"
+        inputs = ["extract_fields"]
+        path   = "/logs/{{ "{{" }} namespace {{ "}}" }}/{{ "{{" }} pod {{ "}}" }}.log"
+
+        [sinks.files.encoding]
+        codec = "text"
+
+  # ── Fluent Bit DaemonSet (agent, all nodes) ───────────────────────────────
+
+  - apiVersion: apps/v1
+    kind: DaemonSet
+    metadata:
+      name: fluent-bit
+      namespace: logging
+    spec:
+      selector:
+        matchLabels:
+          app: fluent-bit
+      template:
+        metadata:
+          labels:
+            app: fluent-bit
+        spec:
+          tolerations:
+            - operator: Exists
+          containers:
+            - name: fluent-bit
+              image: fluent/fluent-bit:latest
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  cpu: 100m
+                  memory: 64Mi
+              volumeMounts:
+                - name: config
+                  mountPath: /fluent-bit/etc/fluent-bit.conf
+                  subPath: fluent-bit.conf
+                - name: varlogpods
+                  mountPath: /var/log/pods
+                  readOnly: true
+                - name: varlogcontainers
+                  mountPath: /var/log/containers
+                  readOnly: true
+                - name: flbstate
+                  mountPath: /var/log/flb-state
+          volumes:
+            - name: config
+              configMap:
+                name: fluent-bit-agent-config
+            - name: varlogpods
+              hostPath:
+                path: /var/log/pods
+            - name: varlogcontainers
+              hostPath:
+                path: /var/log/containers
+            - name: flbstate
+              emptyDir: {}
+
+  # ── Vector Deployment (aggregator, fatman only) ───────────────────────────
+
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: vector-aggregator
+      namespace: logging
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: vector-aggregator
+      template:
+        metadata:
+          labels:
+            app: vector-aggregator
+        spec:
+          nodeSelector:
+            node-role: app-server
+          containers:
+            - name: vector
+              image: timberio/vector:0.43.0-alpine
+              args: ["--config", "/etc/vector/vector.toml"]
+              resources:
+                requests:
+                  cpu: 20m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 128Mi
+              volumeMounts:
+                - name: config
+                  mountPath: /etc/vector/vector.toml
+                  subPath: vector.toml
+                - name: logs
+                  mountPath: /logs
+          volumes:
+            - name: config
+              configMap:
+                name: vector-aggregator-config
+            - name: logs
+              hostPath:
+                path: /var/log/k8s
+                type: DirectoryOrCreate
+
+  # ── Service: log-aggregator ───────────────────────────────────────────────
+
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: log-aggregator
+      namespace: logging
+    spec:
+      selector:
+        app: vector-aggregator
+      ports:
+        - port: 24224
+          targetPort: 24224
+          protocol: TCP
+
+  # ── CronJob: log-rotate (midnight, fatman only) ───────────────────────────
+
+  - apiVersion: batch/v1
+    kind: CronJob
+    metadata:
+      name: log-rotate
+      namespace: logging
+    spec:
+      schedule: "0 0 * * *"
+      concurrencyPolicy: Forbid
+      jobTemplate:
+        spec:
+          template:
+            spec:
+              nodeSelector:
+                node-role: app-server
+              restartPolicy: OnFailure
+              containers:
+                - name: rotate
+                  image: alpine:latest
+                  resources:
+                    requests:
+                      cpu: 10m
+                      memory: 16Mi
+                    limits:
+                      cpu: 50m
+                      memory: 32Mi
+                  volumeMounts:
+                    - name: logs
+                      mountPath: /logs
+                  command:
+                    - sh
+                    - -c
+                    - |
+                      set -e
+                      YESTERDAY=$(date -d yesterday +%Y-%m-%d)
+                      # Rotate live logs into dated subdirectory
+                      find /logs -maxdepth 2 -name "*.log" | while read f; do
+                        dir=$(dirname "$f")
+                        file=$(basename "$f")
+                        mkdir -p "$dir/$YESTERDAY"
+                        mv "$f" "$dir/$YESTERDAY/$file"
+                      done
+                      # Delete date dirs older than 60 days
+                      find /logs -mindepth 2 -maxdepth 2 -type d -mtime +60 \
+                        -exec rm -rf {} +
+                      # Remove empty namespace dirs
+                      find /logs -mindepth 1 -maxdepth 1 -type d -empty -delete
+                      echo "Rotation complete for $YESTERDAY"
+              volumes:
+                - name: logs
+                  hostPath:
+                    path: /var/log/k8s
+                    type: DirectoryOrCreate
