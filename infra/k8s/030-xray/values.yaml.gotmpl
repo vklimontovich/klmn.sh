@@ -55,9 +55,9 @@ resources:
                 "security": "reality",
                 "realitySettings": {
                   "show": false,
-                  "dest": "www.microsoft.com:443",
+                  "dest": "aihero.dev:443",
                   "xver": 0,
-                  "serverNames": ["www.microsoft.com", "aihero.dev", "investing.com", "catholic.com"],
+                  "serverNames": ["aihero.dev", "www.microsoft.com", "investing.com", "catholic.com"],
                   "privateKey": "${PRIVATE_KEY}",
                   "shortIds": ["${SHORT_ID}"]
                 }
@@ -116,7 +116,7 @@ resources:
               effect: "NoSchedule"
             - key: "dedicated"
               operator: "Equal"
-              value: "reserved"
+              value: "vpn-node"
               effect: "NoSchedule"
           initContainers:
             - name: config-render
@@ -171,6 +171,28 @@ resources:
                 limits:
                   memory: 256Mi
                   cpu: 200m
+            - name: tcpdump
+              image: nicolaka/netshoot:latest
+              command:
+                - tcpdump
+                - -i
+                - eth0
+                - -nn
+                - -s
+                - "128"
+                - -A
+                - port
+                - "443"
+              securityContext:
+                capabilities:
+                  add: ["NET_RAW", "NET_ADMIN"]
+              resources:
+                requests:
+                  cpu: 5m
+                  memory: 16Mi
+                limits:
+                  cpu: 50m
+                  memory: 32Mi
           volumes:
             - name: config-template
               configMap:
