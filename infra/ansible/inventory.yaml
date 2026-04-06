@@ -28,7 +28,6 @@ all:
           out_of_tailnet: true
           xray_docker: true
         dolma.greatinet.org:
-          tailscale_exit_node: true
     enter:
       hosts:
         enter.greatinet.org:
