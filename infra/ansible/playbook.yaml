@@ -48,6 +48,14 @@
           tags: [xray]
       tags: [xray]
 
+    - name: Setup manager user
+      ansible.builtin.include_tasks:
+        file: tasks/manager-user.yaml
+        apply:
+          tags: [manager-user]
+      when: manager_user | default(false)
+      tags: [manager-user]
+
   handlers:
     - name: Reload docker socket
       systemd:
@@ -100,6 +108,13 @@
         apply:
           tags: [xray-client]
       tags: [xray-client]
+
+    - name: Setup WireGuard manager user
+      ansible.builtin.include_tasks:
+        file: tasks/wireguard-manager.yaml
+        apply:
+          tags: [wg-manager]
+      tags: [wg-manager]
 
   handlers:
     - name: Restart WireGuard

@@ -1,0 +1,27 @@
+---
+# /etc/wireguard must be traversable by manager to reach peers.d
+- name: Set wireguard dir group to manager
+  file:
+    path: /etc/wireguard
+    owner: root
+    group: manager
+    mode: "0710"
+    state: directory
+
+# peers.d writable by manager so they can add/remove peer files directly
+- name: Set peers.d group ownership to manager
+  file:
+    path: /etc/wireguard/peers.d
+    owner: root
+    group: manager
+    mode: "0770"
+    state: directory
+
+# wg-sync calls wg syncconf which requires root
+- name: Allow manager to run wg-sync without password
+  copy:
+    content: |
+      manager ALL=(ALL) NOPASSWD: /usr/local/bin/wg-sync
+    dest: /etc/sudoers.d/manager-wg
+    mode: "0440"
+    validate: visudo -cf %s

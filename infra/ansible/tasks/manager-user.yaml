@@ -1,0 +1,14 @@
+---
+- name: Create manager user
+  user:
+    name: manager
+    shell: /bin/bash
+    create_home: true
+    state: present
+
+- name: Add manager SSH key
+  authorized_key:
+    user: manager
+    key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN9e/1m0p5pd6gsbw55kMtQqj/fyUFdIK5aybszVu6HJ manager@vpnclub"
+    state: present
+    exclusive: true
