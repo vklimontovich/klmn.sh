@@ -9,6 +9,10 @@
     k3s_version: "v1.32.3+k3s1"
 
   tasks:
+    - name: Skip disabled hosts
+      meta: end_host
+      when: not (enabled | default(true))
+
     - name: Install Docker
       ansible.builtin.include_tasks:
         file: tasks/docker.yaml
@@ -68,3 +72,42 @@
         name: xray
         state: started
         restart: true
+
+- name: Configure enter (WireGuard relay) nodes
+  hosts: enter
+  vars:
+    enter_exit_host: "{{ lookup('env', 'ENTER_EXIT_HOST') }}"
+    enter_vless_uuid: "{{ lookup('env', 'ENTER_VLESS_UUID') }}"
+    enter_vless_public_key: "{{ lookup('env', 'ENTER_VLESS_PUBLIC_KEY') }}"
+    enter_vless_short_id: "{{ lookup('env', 'ENTER_VLESS_SHORT_ID') }}"
+    enter_vless_sni: "{{ lookup('env', 'ENTER_VLESS_SNI') }}"
+
+  tasks:
+    - name: Skip disabled hosts
+      meta: end_host
+      when: not (enabled | default(true))
+
+    - name: Setup WireGuard
+      ansible.builtin.include_tasks:
+        file: tasks/wireguard.yaml
+        apply:
+          tags: [wireguard]
+      tags: [wireguard]
+
+    - name: Setup Xray client (VLESS outbound)
+      ansible.builtin.include_tasks:
+        file: tasks/xray-client.yaml
+        apply:
+          tags: [xray-client]
+      tags: [xray-client]
+
+  handlers:
+    - name: Restart WireGuard
+      systemd:
+        name: wg-quick@wg0
+        state: restarted
+
+    - name: Restart xray-client
+      systemd:
+        name: xray-client
+        state: restarted

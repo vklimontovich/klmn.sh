@@ -1,0 +1,317 @@
+---
+- name: Install dependencies
+  ansible.builtin.apt:
+    name: [ipset, unzip]
+    state: present
+    update_cache: true
+
+- name: Write RU ipset update script
+  copy:
+    content: |
+      #!/bin/bash
+      set -e
+      TMPFILE=$(mktemp)
+      curl -sf https://www.ipdeny.com/ipblocks/data/countries/ru.zone -o "$TMPFILE"
+      COUNT=$(wc -l < "$TMPFILE")
+      {
+        echo "create ru-tmp hash:net maxelem 100000"
+        sed 's/^/add ru-tmp /' "$TMPFILE"
+        echo "create ru hash:net maxelem 100000"
+        echo "swap ru-tmp ru"
+        echo "destroy ru-tmp"
+      } | ipset restore -!
+      rm -f "$TMPFILE"
+      echo "Loaded $COUNT RU prefixes"
+    dest: /usr/local/bin/update-ru-ipset.sh
+    mode: "0755"
+
+- name: Run initial RU ipset population
+  command: /usr/local/bin/update-ru-ipset.sh
+  changed_when: false
+
+- name: Schedule daily RU ipset refresh
+  copy:
+    content: |
+      0 3 * * * root /usr/local/bin/update-ru-ipset.sh >> /var/log/ru-ipset-update.log 2>&1
+    dest: /etc/cron.d/ru-ipset-update
+    mode: "0644"
+
+- name: Create xray-client config directory
+  file:
+    path: /etc/xray-client
+    state: directory
+    mode: "0755"
+
+- name: Write xray-client config
+  copy:
+    content: |
+      {
+        "log": {
+          "loglevel": "warning"
+        },
+        "dns": {
+          "servers": ["8.8.8.8", "1.1.1.1"]
+        },
+        "inbounds": [
+          {
+            "tag": "tproxy",
+            "listen": "0.0.0.0",
+            "port": 1080,
+            "protocol": "dokodemo-door",
+            "settings": {
+              "network": "tcp,udp",
+              "followRedirect": true
+            },
+            "streamSettings": {
+              "sockopt": {
+                "tproxy": "tproxy"
+              }
+            }
+          }
+        ],
+        "outbounds": [
+          {
+            "tag": "vless-tcp",
+            "protocol": "vless",
+            "settings": {
+              "vnext": [
+                {
+                  "address": "{{ enter_exit_host }}",
+                  "port": 443,
+                  "users": [
+                    {
+                      "id": "{{ enter_vless_uuid }}",
+                      "flow": "xtls-rprx-vision",
+                      "encryption": "none"
+                    }
+                  ]
+                }
+              ]
+            },
+            "streamSettings": {
+              "network": "tcp",
+              "security": "reality",
+              "realitySettings": {
+                "serverName": "{{ enter_vless_sni }}",
+                "fingerprint": "chrome",
+                "publicKey": "{{ enter_vless_public_key }}",
+                "shortId": "{{ enter_vless_short_id }}"
+              }
+            }
+          },
+          {
+            "tag": "vless-udp",
+            "protocol": "vless",
+            "settings": {
+              "vnext": [
+                {
+                  "address": "{{ enter_exit_host }}",
+                  "port": 443,
+                  "users": [
+                    {
+                      "id": "{{ enter_vless_uuid }}",
+                      "encryption": "none"
+                    }
+                  ]
+                }
+              ]
+            },
+            "streamSettings": {
+              "network": "tcp",
+              "security": "reality",
+              "realitySettings": {
+                "serverName": "{{ enter_vless_sni }}",
+                "fingerprint": "chrome",
+                "publicKey": "{{ enter_vless_public_key }}",
+                "shortId": "{{ enter_vless_short_id }}"
+              }
+            }
+          },
+          {
+            "tag": "direct",
+            "protocol": "freedom"
+          }
+        ],
+        "routing": {
+          "rules": [
+            {"type": "field", "network": "tcp", "outboundTag": "vless-tcp"},
+            {"type": "field", "network": "udp", "outboundTag": "vless-udp"}
+          ]
+        }
+      }
+    dest: /etc/xray-client/config.json
+    mode: "0600"
+  notify: Restart xray-client
+
+- name: Download and install xray binary
+  block:
+    - name: Get latest xray release URL
+      uri:
+        url: https://api.github.com/repos/XTLS/Xray-core/releases/latest
+        return_content: true
+      register: xray_release
+
+    - name: Download xray zip
+      get_url:
+        url: "{{ xray_release.json.assets | selectattr('name', 'equalto', 'Xray-linux-64.zip') | map(attribute='browser_download_url') | first }}"
+        dest: /tmp/xray-linux-64.zip
+        force: true
+
+    - name: Extract xray binary
+      unarchive:
+        src: /tmp/xray-linux-64.zip
+        dest: /usr/local/bin
+        include:
+          - xray
+        remote_src: true
+        mode: "0755"
+      notify: Restart xray-client
+
+    - name: Clean up zip
+      file:
+        path: /tmp/xray-linux-64.zip
+        state: absent
+
+- name: Write xray-client systemd service
+  copy:
+    content: |
+      [Unit]
+      Description=Xray client (VLESS+Reality outbound)
+      After=network.target wg-tproxy.service
+      Wants=wg-tproxy.service
+
+      [Service]
+      ExecStart=/usr/local/bin/xray run -c /etc/xray-client/config.json
+      Restart=always
+      RestartSec=3
+      LimitNOFILE=65536
+      # Required for TPROXY: process must be able to receive transparently-proxied packets
+      AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+
+      [Install]
+      WantedBy=multi-user.target
+    dest: /etc/systemd/system/xray-client.service
+    mode: "0644"
+  notify: Restart xray-client
+
+- name: Write wg-tproxy start script
+  copy:
+    content: |
+      #!/bin/bash
+      set -e
+
+      # Load kernel modules needed for TPROXY (transparent proxy without NAT).
+      # xt_TPROXY: the TPROXY iptables target itself.
+      # xt_socket: lets the kernel match packets that belong to a local socket,
+      #   required so TPROXY can hand off packets to the listening process.
+      modprobe xt_TPROXY
+      modprobe xt_socket
+
+      # Fetch current RU IP ranges into the 'ru' ipset.
+      # Done on every start so the list survives reboots (ipset is in-memory only).
+      /usr/local/bin/update-ru-ipset.sh
+
+      # Policy routing: packets marked with fwmark=1 use routing table 100.
+      # TPROXY sets this mark so the kernel knows to deliver the packet locally
+      # instead of forwarding it out.
+      ip rule add fwmark 1 lookup 100 2>/dev/null || true
+
+      # In table 100, route everything to lo (loopback).
+      # This makes the kernel treat TPROXY-marked packets as destined for this
+      # host, so Xray's listening socket can receive them.
+      ip route add local default dev lo table 100 2>/dev/null || true
+
+      # RU bypass: if the destination is a Russian IP, skip TPROXY entirely and
+      # let the packet be forwarded normally (direct path, no VPN overhead).
+      # Inserted at position 1 so it runs before the TPROXY rules below.
+      iptables -t mangle -C PREROUTING -i wg0 -m set --match-set ru dst -j RETURN 2>/dev/null \
+        || iptables -t mangle -I PREROUTING 1 -i wg0 -m set --match-set ru dst -j RETURN
+
+      # TPROXY: redirect all remaining WireGuard TCP traffic to Xray on port 1080.
+      # fwmark=1 triggers the policy route above so the packet stays on this host.
+      iptables -t mangle -C PREROUTING -i wg0 -p tcp -j TPROXY --on-port 1080 --tproxy-mark 1 2>/dev/null \
+        || iptables -t mangle -A PREROUTING -i wg0 -p tcp -j TPROXY --on-port 1080 --tproxy-mark 1
+
+      # Same for UDP. Note: XTLS (vless-tcp) only handles TCP; the vless-udp outbound
+      # in xray config uses plain VLESS without flow to carry UDP over the same TCP tunnel.
+      iptables -t mangle -C PREROUTING -i wg0 -p udp -j TPROXY --on-port 1080 --tproxy-mark 1 2>/dev/null \
+        || iptables -t mangle -A PREROUTING -i wg0 -p udp -j TPROXY --on-port 1080 --tproxy-mark 1
+
+      # MASQUERADE: rewrite the source IP of direct traffic (RU IPs, ICMP) to the
+      # server's outbound IP. Without this, reply packets would go to 10.8.0.x
+      # (the WireGuard client IP), which the internet doesn't know how to reach.
+      iptables -t nat -C POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null \
+        || iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -j MASQUERADE
+
+      # Allow WireGuard traffic through the FORWARD chain.
+      # UFW sets FORWARD policy to DROP by default; these rules punch holes for wg0.
+      iptables -C FORWARD -i wg0 -j ACCEPT 2>/dev/null \
+        || iptables -I FORWARD 1 -i wg0 -j ACCEPT
+      iptables -C FORWARD -o wg0 -j ACCEPT 2>/dev/null \
+        || iptables -I FORWARD 2 -o wg0 -j ACCEPT
+
+      # MSS clamping: WireGuard adds overhead (~60 bytes) that reduces the effective
+      # MTU. Large packets on the direct (non-TPROXY) path would be silently dropped
+      # without this. Clamping MSS to PMTU forces TCP to negotiate a smaller segment
+      # size and avoids fragmentation issues on both directions.
+      iptables -t mangle -C FORWARD -i wg0 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null \
+        || iptables -t mangle -A FORWARD -i wg0 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+      iptables -t mangle -C FORWARD -o wg0 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null \
+        || iptables -t mangle -A FORWARD -o wg0 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+    dest: /usr/local/bin/wg-tproxy-start.sh
+    mode: "0755"
+
+- name: Write wg-tproxy stop script
+  copy:
+    content: |
+      #!/bin/bash
+      # Remove all rules added by the start script, in reverse order.
+      # '|| true' everywhere so partial teardown doesn't abort on missing rules.
+
+      iptables -t mangle -D FORWARD -o wg0 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || true
+      iptables -t mangle -D FORWARD -i wg0 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || true
+      iptables -D FORWARD -o wg0 -j ACCEPT 2>/dev/null || true
+      iptables -D FORWARD -i wg0 -j ACCEPT 2>/dev/null || true
+      iptables -t nat -D POSTROUTING -s 10.8.0.0/24 -j MASQUERADE 2>/dev/null || true
+      iptables -t mangle -D PREROUTING -i wg0 -p udp -j TPROXY --on-port 1080 --tproxy-mark 1 2>/dev/null || true
+      iptables -t mangle -D PREROUTING -i wg0 -p tcp -j TPROXY --on-port 1080 --tproxy-mark 1 2>/dev/null || true
+      iptables -t mangle -D PREROUTING -i wg0 -m set --match-set ru dst -j RETURN 2>/dev/null || true
+      ip route del local default dev lo table 100 2>/dev/null || true
+      ip rule del fwmark 1 lookup 100 2>/dev/null || true
+    dest: /usr/local/bin/wg-tproxy-stop.sh
+    mode: "0755"
+
+- name: Write wg-tproxy systemd unit
+  copy:
+    content: |
+      [Unit]
+      Description=WireGuard tproxy routing rules
+      After=network.target wg-quick@wg0.service docker.service
+      Wants=wg-quick@wg0.service
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStartPre=/sbin/modprobe xt_TPROXY
+      ExecStartPre=/sbin/modprobe xt_socket
+      ExecStart=/usr/local/bin/wg-tproxy-start.sh
+      ExecStop=/usr/local/bin/wg-tproxy-stop.sh
+
+      [Install]
+      WantedBy=multi-user.target
+    dest: /etc/systemd/system/wg-tproxy.service
+    mode: "0644"
+
+- name: Enable and start wg-tproxy
+  systemd:
+    name: wg-tproxy
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Enable and start xray-client
+  systemd:
+    name: xray-client
+    enabled: true
+    state: started
+    daemon_reload: true

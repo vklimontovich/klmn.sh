@@ -1,8 +1,8 @@
 ---
-# Only run on out_of_tailnet nodes
-- name: Skip xray-docker for tailnet nodes
+# Only run on nodes with xray_docker: true
+- name: Skip xray-docker for non-xray-docker nodes
   meta: end_host
-  when: not (out_of_tailnet | default(false))
+  when: not (xray_docker | default(false))
 
 # Fetch xray secrets from k8s cluster via k3s master
 - name: Get xray private key from k8s

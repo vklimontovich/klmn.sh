@@ -3,6 +3,8 @@ all:
     master:
       hosts:
         fatman.klmn.sh:
+    workers:
+      hosts:
         dc.vpnclub.org:
           tailscale_exit_node: true
           open_ports:
@@ -13,6 +15,7 @@ all:
               proto: tcp
               comment: "Shadowbox management API"
         nl.vpnclub.org:
+          ansible_user: cloud-user
           tailscale_exit_node: true
           open_ports:
             - port: "45383"
@@ -21,10 +24,20 @@ all:
             - port: "33287"
               proto: tcp
               comment: "Shadowbox management API"
-    workers:
-      hosts:
         mrdr.greatinet.org:
           out_of_tailnet: true
+          xray_docker: true
+        dolma.greatinet.org:
+          tailscale_exit_node: true
+    enter:
+      hosts:
+        enter.greatinet.org:
+          out_of_tailnet: true
+          enabled: true
+          open_ports:
+            - port: "51820"
+              proto: udp
+              comment: "WireGuard"
   vars:
     ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
     ansible_become: true

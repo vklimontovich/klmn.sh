@@ -1,4 +1,8 @@
 ---
+- name: Skip Tailscale for out-of-tailnet nodes
+  meta: end_host
+  when: out_of_tailnet | default(false)
+
 - name: Check if Tailscale is installed
   command: tailscale --version
   register: tailscale_installed

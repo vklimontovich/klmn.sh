@@ -1,0 +1,76 @@
+---
+- name: Install wireguard-tools
+  ansible.builtin.apt:
+    name: wireguard-tools
+    state: present
+    update_cache: true
+
+- name: Enable IP forwarding
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_forward
+    value: "1"
+    state: present
+    sysctl_set: true
+    reload: true
+
+- name: Create WireGuard peers directory
+  file:
+    path: /etc/wireguard/peers.d
+    state: directory
+    mode: "0700"
+
+- name: Generate server keypair
+  shell: wg genkey | tee /etc/wireguard/server.key | wg pubkey > /etc/wireguard/server.pub
+  args:
+    creates: /etc/wireguard/server.key
+
+- name: Set permissions on server private key
+  file:
+    path: /etc/wireguard/server.key
+    mode: "0600"
+
+- name: Read server private key
+  slurp:
+    src: /etc/wireguard/server.key
+  register: wg_server_key_b64
+
+- name: Set WireGuard key facts
+  set_fact:
+    wg_server_private_key: "{{ wg_server_key_b64.content | b64decode | trim }}"
+
+- name: Write wg0-base.conf
+  copy:
+    content: |
+      [Interface]
+      Address = 10.8.0.1/24
+      ListenPort = 51820
+      PrivateKey = {{ wg_server_private_key }}
+    dest: /etc/wireguard/wg0-base.conf
+    mode: "0600"
+  notify: Restart WireGuard
+
+- name: Write wg-sync script
+  copy:
+    content: |
+      #!/bin/bash
+      set -e
+      { cat /etc/wireguard/wg0-base.conf; find /etc/wireguard/peers.d/ -name '*.conf' -exec cat {} +; } \
+        | grep -v '^Address\s*=' \
+        > /etc/wireguard/wg0.conf
+      wg syncconf wg0 /etc/wireguard/wg0.conf
+    dest: /usr/local/bin/wg-sync
+    mode: "0755"
+
+- name: Generate initial wg0.conf
+  shell: >
+    { cat /etc/wireguard/wg0-base.conf;
+      find /etc/wireguard/peers.d/ -name '*.conf' -exec cat {} +; }
+    > /etc/wireguard/wg0.conf
+  args:
+    creates: /etc/wireguard/wg0.conf
+
+- name: Enable and start wg-quick@wg0
+  systemd:
+    name: wg-quick@wg0
+    enabled: true
+    state: started
