@@ -81,7 +81,6 @@
                   "users": [
                     {
                       "id": "{{ enter_vless_uuid }}",
-                      "flow": "xtls-rprx-vision",
                       "encryption": "none"
                     }
                   ]
@@ -97,7 +96,8 @@
                 "publicKey": "{{ enter_vless_public_key }}",
                 "shortId": "{{ enter_vless_short_id }}"
               }
-            }
+            },
+            "mux": {"enabled": true, "concurrency": 8}
           },
           {
             "tag": "vless-udp",
@@ -125,7 +125,8 @@
                 "publicKey": "{{ enter_vless_public_key }}",
                 "shortId": "{{ enter_vless_short_id }}"
               }
-            }
+            },
+            "mux": {"enabled": true, "concurrency": 8}
           },
           {
             "tag": "direct",
