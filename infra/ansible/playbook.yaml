@@ -89,6 +89,8 @@
     enter_vless_public_key: "{{ lookup('env', 'ENTER_VLESS_PUBLIC_KEY') }}"
     enter_vless_short_id: "{{ lookup('env', 'ENTER_VLESS_SHORT_ID') }}"
     enter_vless_sni: "{{ lookup('env', 'ENTER_VLESS_SNI') }}"
+    wg_server_cidr: "10.8.0.1/22"
+    wg_subnet: "10.8.0.0/22"
 
   tasks:
     - name: Skip disabled hosts

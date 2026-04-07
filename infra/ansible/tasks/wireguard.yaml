@@ -42,7 +42,7 @@
   copy:
     content: |
       [Interface]
-      Address = 10.8.0.1/24
+      Address = {{ wg_server_cidr }}
       ListenPort = 51820
       PrivateKey = {{ wg_server_private_key }}
     dest: /etc/wireguard/wg0-base.conf
@@ -58,6 +58,8 @@
         | grep -v '^Address\s*=' \
         > /etc/wireguard/wg0.conf
       wg syncconf wg0 /etc/wireguard/wg0.conf
+      # Re-add server IP if missing (wg syncconf strips Address=, wg-quick won't re-set it)
+      ip addr show wg0 | grep -qF '{{ wg_server_cidr }}' || ip addr add {{ wg_server_cidr }} dev wg0
     dest: /usr/local/bin/wg-sync
     mode: "0755"
 
