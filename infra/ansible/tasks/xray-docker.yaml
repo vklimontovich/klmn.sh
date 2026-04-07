@@ -90,9 +90,9 @@
               "security": "reality",
               "realitySettings": {
                 "show": false,
-                "dest": "www.microsoft.com:443",
+                "dest": "{{ xray_dest | default('ftp.acc.umu.se:443') }}",
                 "xver": 0,
-                "serverNames": ["www.microsoft.com", "aihero.dev", "investing.com", "catholic.com"],
+                "serverNames": ["hayhost.am", "ysu.am", "ftp.snt.utwente.nl", "ftp.acc.umu.se", "mirror.umd.edu", "packages.ubuntu.com", "www.microsoft.com", "aihero.dev", "dolma.greatinet.org", "nl.greatinet.org", "dc.greatinet.org", "mrdr.greatinet.org", "nl.vpnclub.org", "dc.vpnclub.org", "investing.com", "catholic.com"],
                 "privateKey": "{{ xray_private_key }}",
                 "shortIds": ["{{ xray_short_id }}"]
               }

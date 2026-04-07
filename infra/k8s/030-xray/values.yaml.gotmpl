@@ -55,9 +55,9 @@ resources:
                 "security": "reality",
                 "realitySettings": {
                   "show": false,
-                  "dest": "packages.ubuntu.com:443",
+                  "dest": "${DEST}",
                   "xver": 0,
-                  "serverNames": ["packages.ubuntu.com", "aihero.dev", "www.microsoft.com", "investing.com", "catholic.com"],
+                  "serverNames": ["hayhost.am", "ysu.am", "ftp.snt.utwente.nl", "ftp.acc.umu.se", "mirror.umd.edu", "packages.ubuntu.com", "www.microsoft.com", "aihero.dev", "dolma.greatinet.org", "nl.greatinet.org", "dc.greatinet.org", "mrdr.greatinet.org", "nl.vpnclub.org", "dc.vpnclub.org", "investing.com", "catholic.com"],
                   "privateKey": "${PRIVATE_KEY}",
                   "shortIds": ["${SHORT_ID}"]
                 }
@@ -126,7 +126,13 @@ resources:
                 - -c
                 - |
                   apk add --no-cache gettext jq >/dev/null
-                  # Render config with secrets
+                  # Resolve per-node dest from DB-provisioned ConfigMap (fallback to ftp.acc.umu.se)
+                  if [ -f /etc/xray-template/dests.json ]; then
+                    export DEST=$(jq -r --arg n "$NODE_NAME" '.[$n] // "ftp.acc.umu.se:443"' /etc/xray-template/dests.json)
+                  else
+                    export DEST="ftp.acc.umu.se:443"
+                  fi
+                  # Render config with secrets and dest
                   envsubst < /etc/xray-template/config.json > /tmp/config.json
                   # Merge users into config (inject clients into vless-reality inbound)
                   CLIENTS=$(jq -c '.inbounds[0].settings.clients' /etc/xray-template/users.json)
@@ -134,6 +140,10 @@ resources:
                     '(.inbounds[] | select(.tag == "vless-reality") | .settings.clients) = $clients' \
                     /tmp/config.json > /etc/xray/config.json
               env:
+                - name: NODE_NAME
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: spec.nodeName
                 - name: PRIVATE_KEY
                   valueFrom:
                     secretKeyRef:
@@ -151,6 +161,9 @@ resources:
                 - name: users
                   mountPath: /etc/xray-template/users.json
                   subPath: users.json
+                - name: node-dests
+                  mountPath: /etc/xray-template/dests.json
+                  subPath: dests.json
                 - name: config-rendered
                   mountPath: /etc/xray
           containers:
@@ -200,6 +213,10 @@ resources:
             - name: users
               configMap:
                 name: xray-users
+            - name: node-dests
+              configMap:
+                name: xray-node-dests
+                optional: true
             - name: config-rendered
               emptyDir: {}
 

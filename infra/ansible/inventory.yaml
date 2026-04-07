@@ -27,6 +27,7 @@ all:
         mrdr.greatinet.org:
           out_of_tailnet: true
           xray_docker: true
+          xray_dest: "ftp.acc.umu.se:443"
         dolma.greatinet.org:
     enter:
       hosts:
