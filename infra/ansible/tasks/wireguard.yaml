@@ -13,6 +13,17 @@
     sysctl_set: true
     reload: true
 
+- name: Enable BBR congestion control
+  ansible.posix.sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    sysctl_set: true
+    reload: true
+  loop:
+    - { name: net.core.default_qdisc, value: fq }
+    - { name: net.ipv4.tcp_congestion_control, value: bbr }
+
 - name: Create WireGuard peers directory
   file:
     path: /etc/wireguard/peers.d
@@ -45,6 +56,7 @@
       Address = {{ wg_server_cidr }}
       ListenPort = 51820
       PrivateKey = {{ wg_server_private_key }}
+      MTU = {{ wg_mtu }}
     dest: /etc/wireguard/wg0-base.conf
     mode: "0600"
   notify: Restart WireGuard
@@ -55,11 +67,13 @@
       #!/bin/bash
       set -e
       { cat /etc/wireguard/wg0-base.conf; find /etc/wireguard/peers.d/ -name '*.conf' -exec cat {} +; } \
-        | grep -v '^Address\s*=' \
+        | grep -Ev '^(Address|MTU)\s*=' \
         > /etc/wireguard/wg0.conf
       wg syncconf wg0 /etc/wireguard/wg0.conf
       # Re-add server IP if missing (wg syncconf strips Address=, wg-quick won't re-set it)
       ip addr show wg0 | grep -qF '{{ wg_server_cidr }}' || ip addr add {{ wg_server_cidr }} dev wg0
+      # Re-apply MTU (wg syncconf strips MTU=)
+      ip link set wg0 mtu {{ wg_mtu }}
     dest: /usr/local/bin/wg-sync
     mode: "0755"
 

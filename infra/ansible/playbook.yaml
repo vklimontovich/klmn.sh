@@ -91,6 +91,7 @@
     enter_vless_sni: "{{ lookup('env', 'ENTER_VLESS_SNI') }}"
     wg_server_cidr: "10.8.0.1/22"
     wg_subnet: "10.8.0.0/22"
+    wg_mtu: 1310
 
   tasks:
     - name: Skip disabled hosts

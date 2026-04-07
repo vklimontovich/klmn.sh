@@ -214,6 +214,10 @@
       ip addr show wg0 | grep -qF '{{ wg_server_cidr }}' \
         || ip addr add {{ wg_server_cidr }} dev wg0
 
+      # Apply MTU. wg syncconf strips MTU= (it's a wg-quick directive, not a
+      # wireguard protocol field), so we set it explicitly on the interface.
+      ip link set wg0 mtu {{ wg_mtu }}
+
       # Fetch current RU IP ranges into the 'ru' ipset.
       # Done on every start so the list survives reboots (ipset is in-memory only).
       /usr/local/bin/update-ru-ipset.sh
