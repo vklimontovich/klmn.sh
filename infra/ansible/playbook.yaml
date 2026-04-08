@@ -125,6 +125,11 @@
         name: wg-quick@wg0
         state: restarted
 
+    - name: Restart wg-tproxy
+      systemd:
+        name: wg-tproxy
+        state: restarted
+
     - name: Restart xray-client
       systemd:
         name: xray-client

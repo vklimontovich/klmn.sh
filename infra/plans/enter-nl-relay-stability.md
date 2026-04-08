@@ -70,6 +70,7 @@ This plan does not target QUIC or HTTP/3 support. It is the cleanup pass that ma
 - `ip rule show` on `enter` contains exactly one `fwmark 0x1 lookup 100` rule.
 - `journalctl -u xray-client` on `enter` shows no new `loopback connection detected` messages during a fresh client test run.
 - TPROXY rules still capture intended user traffic from `wg0`, but no longer recapture traffic to the relay subnet or the exit host itself.
+- A reconnect burst from a real client app, such as restarting Telegram while WireGuard stays up, completes without chat-loading failure and without any fresh proxied destinations inside the relay subnet or the exit host IP.
 - Existing user-facing behavior for normal TCP traffic, STUN reachability, and long-lived sessions is unchanged or slightly improved.
 - K8s docs correctly describe how Xray is actually deployed to `vpn-node` nodes.
 
@@ -80,6 +81,7 @@ This plan does not target QUIC or HTTP/3 support. It is the cleanup pass that ma
 - Verify `ip rule show` has one policy rule for `fwmark 1`.
 - Verify `iptables -t mangle -S PREROUTING` shows bypass rules before generic TPROXY rules.
 - Verify `journalctl -u xray-client` contains no fresh loopback errors.
+- Reproduce a real client reconnect burst, such as restarting Telegram while WireGuard stays connected, and confirm chats load while `journalctl -u xray-client` shows no proxied destinations inside the relay subnet or the exit host IP during that window.
 - Re-run the existing client test script and confirm there is no regression in TCP churn, connection storm, DNS latency, and long-lived session tests.
 - Expect QUIC to remain unsupported in this plan.
 

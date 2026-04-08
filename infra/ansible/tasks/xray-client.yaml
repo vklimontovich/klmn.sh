@@ -42,7 +42,18 @@
     state: directory
     mode: "0755"
 
+- name: Resolve exit host IPv4 for tproxy bypass
+  ansible.builtin.command: getent ahostsv4 {{ enter_exit_host }}
+  register: enter_exit_host_lookup
+  changed_when: false
+
+- name: Set exit host IPv4 fact
+  ansible.builtin.set_fact:
+    enter_exit_host_ipv4: "{{ (enter_exit_host_lookup.stdout_lines | first).split()[0] }}"
+
 - name: Write xray-client config
+  # UDP traffic still rides a TCP-based REALITY transport here. That is fine for
+  # baseline relay correctness, but it is not native QUIC or HTTP/3 support.
   copy:
     content: |
       {
@@ -199,7 +210,7 @@
   copy:
     content: |
       #!/bin/bash
-      set -e
+      set -euo pipefail
 
       # Load kernel modules needed for TPROXY (transparent proxy without NAT).
       # xt_TPROXY: the TPROXY iptables target itself.
@@ -208,14 +219,14 @@
       modprobe xt_TPROXY
       modprobe xt_socket
 
-      # Ensure wg0 has its server IP assigned. wg-quick reads wg0.conf which has
-      # Address stripped (wg-sync strips it for wg syncconf compatibility), so the
-      # IP may be missing after a wg-quick restart.
+      # Keep wg0 aligned with the intended server-side interface settings.
+      # wg0.conf now remains a full wg-quick file, but reasserting these values
+      # here lets a wg-tproxy restart repair pre-existing drift as well.
       ip addr show wg0 | grep -qF '{{ wg_server_cidr }}' \
         || ip addr add {{ wg_server_cidr }} dev wg0
 
-      # Apply MTU. wg syncconf strips MTU= (it's a wg-quick directive, not a
-      # wireguard protocol field), so we set it explicitly on the interface.
+      # MTU is a wg-quick directive rather than a WireGuard protocol field.
+      # Set it explicitly so wg-tproxy restarts keep the live interface honest.
       ip link set wg0 mtu {{ wg_mtu }}
 
       # Fetch current RU IP ranges into the 'ru' ipset.
@@ -223,30 +234,36 @@
       /usr/local/bin/update-ru-ipset.sh
 
       # Policy routing: packets marked with fwmark=1 use routing table 100.
-      # TPROXY sets this mark so the kernel knows to deliver the packet locally
-      # instead of forwarding it out.
-      ip rule add fwmark 1 lookup 100 2>/dev/null || true
+      # First remove any drifted duplicates, then install the exact rule we want
+      # at a fixed priority so inspection and teardown stay deterministic.
+      while ip -4 rule show | grep -q 'fwmark 0x1 lookup 100'; do
+        ip -4 rule del fwmark 1 table 100 2>/dev/null || break
+      done
+      ip -4 rule add pref 100 fwmark 1 table 100
 
       # In table 100, route everything to lo (loopback).
       # This makes the kernel treat TPROXY-marked packets as destined for this
       # host, so Xray's listening socket can receive them.
-      ip route add local default dev lo table 100 2>/dev/null || true
+      ip -4 route replace local 0.0.0.0/0 dev lo table 100
 
-      # RU bypass: if the destination is a Russian IP, skip TPROXY entirely and
-      # let the packet be forwarded normally (direct path, no VPN overhead).
-      # Inserted at position 1 so it runs before the TPROXY rules below.
-      iptables -t mangle -C PREROUTING -i wg0 -m set --match-set ru dst -j RETURN 2>/dev/null \
-        || iptables -t mangle -I PREROUTING 1 -i wg0 -m set --match-set ru dst -j RETURN
+      # Rebuild the PREROUTING section we own so bypass order is deterministic.
+      while iptables -t mangle -D PREROUTING -i wg0 -d {{ wg_subnet }} -j RETURN 2>/dev/null; do :; done
+      while iptables -t mangle -D PREROUTING -i wg0 -d {{ enter_exit_host_ipv4 }}/32 -j RETURN 2>/dev/null; do :; done
+      while iptables -t mangle -D PREROUTING -i wg0 -m set --match-set ru dst -j RETURN 2>/dev/null; do :; done
+      while iptables -t mangle -D PREROUTING -i wg0 -p tcp -j TPROXY --on-port 1080 --tproxy-mark 1 2>/dev/null; do :; done
+      while iptables -t mangle -D PREROUTING -i wg0 -p udp -j TPROXY --on-port 1080 --tproxy-mark 1 2>/dev/null; do :; done
 
-      # TPROXY: redirect all remaining WireGuard TCP traffic to Xray on port 1080.
-      # fwmark=1 triggers the policy route above so the packet stays on this host.
-      iptables -t mangle -C PREROUTING -i wg0 -p tcp -j TPROXY --on-port 1080 --tproxy-mark 1 2>/dev/null \
-        || iptables -t mangle -A PREROUTING -i wg0 -p tcp -j TPROXY --on-port 1080 --tproxy-mark 1
-
-      # Same for UDP. Note: XTLS (vless-tcp) only handles TCP; the vless-udp outbound
-      # in xray config uses plain VLESS without flow to carry UDP over the same TCP tunnel.
-      iptables -t mangle -C PREROUTING -i wg0 -p udp -j TPROXY --on-port 1080 --tproxy-mark 1 2>/dev/null \
-        || iptables -t mangle -A PREROUTING -i wg0 -p udp -j TPROXY --on-port 1080 --tproxy-mark 1
+      # Insert in reverse order so the final top-down chain is:
+      # 1) WireGuard subnet bypass
+      # 2) Exit-host bypass
+      # 3) RU bypass
+      # 4) Generic TCP TPROXY
+      # 5) Generic UDP TPROXY
+      iptables -t mangle -I PREROUTING 1 -i wg0 -p udp -j TPROXY --on-port 1080 --tproxy-mark 1
+      iptables -t mangle -I PREROUTING 1 -i wg0 -p tcp -j TPROXY --on-port 1080 --tproxy-mark 1
+      iptables -t mangle -I PREROUTING 1 -i wg0 -m set --match-set ru dst -j RETURN
+      iptables -t mangle -I PREROUTING 1 -i wg0 -d {{ enter_exit_host_ipv4 }}/32 -j RETURN
+      iptables -t mangle -I PREROUTING 1 -i wg0 -d {{ wg_subnet }} -j RETURN
 
       # MASQUERADE: rewrite the source IP of direct traffic (RU IPs, ICMP) to the
       # server's outbound IP. Without this, reply packets would go to 10.8.0.x
@@ -271,26 +288,32 @@
         || iptables -t mangle -A FORWARD -o wg0 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
     dest: /usr/local/bin/wg-tproxy-start.sh
     mode: "0755"
+  notify: Restart wg-tproxy
 
 - name: Write wg-tproxy stop script
   copy:
     content: |
       #!/bin/bash
+      set -euo pipefail
+
       # Remove all rules added by the start script, in reverse order.
       # '|| true' everywhere so partial teardown doesn't abort on missing rules.
 
-      iptables -t mangle -D FORWARD -o wg0 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || true
-      iptables -t mangle -D FORWARD -i wg0 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || true
-      iptables -D FORWARD -o wg0 -j ACCEPT 2>/dev/null || true
-      iptables -D FORWARD -i wg0 -j ACCEPT 2>/dev/null || true
-      iptables -t nat -D POSTROUTING -s {{ wg_subnet }} -j MASQUERADE 2>/dev/null || true
-      iptables -t mangle -D PREROUTING -i wg0 -p udp -j TPROXY --on-port 1080 --tproxy-mark 1 2>/dev/null || true
-      iptables -t mangle -D PREROUTING -i wg0 -p tcp -j TPROXY --on-port 1080 --tproxy-mark 1 2>/dev/null || true
-      iptables -t mangle -D PREROUTING -i wg0 -m set --match-set ru dst -j RETURN 2>/dev/null || true
-      ip route del local default dev lo table 100 2>/dev/null || true
-      ip rule del fwmark 1 lookup 100 2>/dev/null || true
+      while iptables -t mangle -D FORWARD -o wg0 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null; do :; done
+      while iptables -t mangle -D FORWARD -i wg0 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null; do :; done
+      while iptables -D FORWARD -o wg0 -j ACCEPT 2>/dev/null; do :; done
+      while iptables -D FORWARD -i wg0 -j ACCEPT 2>/dev/null; do :; done
+      while iptables -t nat -D POSTROUTING -s {{ wg_subnet }} -j MASQUERADE 2>/dev/null; do :; done
+      while iptables -t mangle -D PREROUTING -i wg0 -p udp -j TPROXY --on-port 1080 --tproxy-mark 1 2>/dev/null; do :; done
+      while iptables -t mangle -D PREROUTING -i wg0 -p tcp -j TPROXY --on-port 1080 --tproxy-mark 1 2>/dev/null; do :; done
+      while iptables -t mangle -D PREROUTING -i wg0 -m set --match-set ru dst -j RETURN 2>/dev/null; do :; done
+      while iptables -t mangle -D PREROUTING -i wg0 -d {{ enter_exit_host_ipv4 }}/32 -j RETURN 2>/dev/null; do :; done
+      while iptables -t mangle -D PREROUTING -i wg0 -d {{ wg_subnet }} -j RETURN 2>/dev/null; do :; done
+      ip -4 route del local 0.0.0.0/0 dev lo table 100 2>/dev/null || true
+      ip -4 rule del pref 100 fwmark 1 table 100 2>/dev/null || true
     dest: /usr/local/bin/wg-tproxy-stop.sh
     mode: "0755"
+  notify: Restart wg-tproxy
 
 - name: Write wg-tproxy systemd unit
   copy:
@@ -312,6 +335,7 @@
       WantedBy=multi-user.target
     dest: /etc/systemd/system/wg-tproxy.service
     mode: "0644"
+  notify: Restart wg-tproxy
 
 - name: Enable and start wg-tproxy
   systemd:
