@@ -246,9 +246,26 @@
       # host, so Xray's listening socket can receive them.
       ip -4 route replace local 0.0.0.0/0 dev lo table 100
 
+      # Client-local and special-use destinations should never be proxied.
+      # Do not blanket-bypass 10.0.0.0/8 here because WireGuard itself lives
+      # inside that space and is already handled by the explicit wg_subnet rule.
+      local_bypass_cidrs=(
+        127.0.0.0/8
+        169.254.0.0/16
+        172.16.0.0/12
+        192.168.0.0/16
+        198.18.0.0/15
+        100.64.0.0/10
+        224.0.0.0/4
+        255.255.255.255/32
+      )
+
       # Rebuild the PREROUTING section we own so bypass order is deterministic.
       while iptables -t mangle -D PREROUTING -i wg0 -d {{ wg_subnet }} -j RETURN 2>/dev/null; do :; done
       while iptables -t mangle -D PREROUTING -i wg0 -d {{ enter_exit_host_ipv4 }}/32 -j RETURN 2>/dev/null; do :; done
+      for cidr in "${local_bypass_cidrs[@]}"; do
+        while iptables -t mangle -D PREROUTING -i wg0 -d "$cidr" -j RETURN 2>/dev/null; do :; done
+      done
       while iptables -t mangle -D PREROUTING -i wg0 -m set --match-set ru dst -j RETURN 2>/dev/null; do :; done
       while iptables -t mangle -D PREROUTING -i wg0 -p tcp -j TPROXY --on-port 1080 --tproxy-mark 1 2>/dev/null; do :; done
       while iptables -t mangle -D PREROUTING -i wg0 -p udp -j TPROXY --on-port 1080 --tproxy-mark 1 2>/dev/null; do :; done
@@ -256,12 +273,24 @@
       # Insert in reverse order so the final top-down chain is:
       # 1) WireGuard subnet bypass
       # 2) Exit-host bypass
-      # 3) RU bypass
-      # 4) Generic TCP TPROXY
-      # 5) Generic UDP TPROXY
+      # 3) Client-local and special-use destination bypasses
+      # 4) RU bypass
+      # 5) Generic TCP TPROXY
+      # 6) Generic UDP TPROXY
       iptables -t mangle -I PREROUTING 1 -i wg0 -p udp -j TPROXY --on-port 1080 --tproxy-mark 1
       iptables -t mangle -I PREROUTING 1 -i wg0 -p tcp -j TPROXY --on-port 1080 --tproxy-mark 1
       iptables -t mangle -I PREROUTING 1 -i wg0 -m set --match-set ru dst -j RETURN
+      for cidr in \
+        255.255.255.255/32 \
+        224.0.0.0/4 \
+        100.64.0.0/10 \
+        198.18.0.0/15 \
+        192.168.0.0/16 \
+        172.16.0.0/12 \
+        169.254.0.0/16 \
+        127.0.0.0/8; do
+        iptables -t mangle -I PREROUTING 1 -i wg0 -d "$cidr" -j RETURN
+      done
       iptables -t mangle -I PREROUTING 1 -i wg0 -d {{ enter_exit_host_ipv4 }}/32 -j RETURN
       iptables -t mangle -I PREROUTING 1 -i wg0 -d {{ wg_subnet }} -j RETURN
 
@@ -299,6 +328,17 @@
       # Remove all rules added by the start script, in reverse order.
       # '|| true' everywhere so partial teardown doesn't abort on missing rules.
 
+      local_bypass_cidrs=(
+        127.0.0.0/8
+        169.254.0.0/16
+        172.16.0.0/12
+        192.168.0.0/16
+        198.18.0.0/15
+        100.64.0.0/10
+        224.0.0.0/4
+        255.255.255.255/32
+      )
+
       while iptables -t mangle -D FORWARD -o wg0 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null; do :; done
       while iptables -t mangle -D FORWARD -i wg0 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null; do :; done
       while iptables -D FORWARD -o wg0 -j ACCEPT 2>/dev/null; do :; done
@@ -307,6 +347,9 @@
       while iptables -t mangle -D PREROUTING -i wg0 -p udp -j TPROXY --on-port 1080 --tproxy-mark 1 2>/dev/null; do :; done
       while iptables -t mangle -D PREROUTING -i wg0 -p tcp -j TPROXY --on-port 1080 --tproxy-mark 1 2>/dev/null; do :; done
       while iptables -t mangle -D PREROUTING -i wg0 -m set --match-set ru dst -j RETURN 2>/dev/null; do :; done
+      for cidr in "${local_bypass_cidrs[@]}"; do
+        while iptables -t mangle -D PREROUTING -i wg0 -d "$cidr" -j RETURN 2>/dev/null; do :; done
+      done
       while iptables -t mangle -D PREROUTING -i wg0 -d {{ enter_exit_host_ipv4 }}/32 -j RETURN 2>/dev/null; do :; done
       while iptables -t mangle -D PREROUTING -i wg0 -d {{ wg_subnet }} -j RETURN 2>/dev/null; do :; done
       ip -4 route del local 0.0.0.0/0 dev lo table 100 2>/dev/null || true
