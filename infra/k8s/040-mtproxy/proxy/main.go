@@ -41,6 +41,20 @@ func (allowAll) Contains(net.IP) bool { return true }
 func (allowAll) Run(time.Duration)    {}
 func (allowAll) Shutdown()            {}
 
+type keepAliveListener struct {
+	*net.TCPListener
+}
+
+func (l keepAliveListener) Accept() (net.Conn, error) {
+	tc, err := l.TCPListener.AcceptTCP()
+	if err != nil {
+		return nil, err
+	}
+	tc.SetKeepAlive(true)
+	tc.SetKeepAlivePeriod(30 * time.Second)
+	return tc, nil
+}
+
 // counter tracks traffic and active connections for one user/secret.
 type counter struct {
 	received atomic.Int64
@@ -158,19 +172,23 @@ func startProxy(ctx context.Context, e entry, c *counter, ntw mtglib.Network, ar
 		return fmt.Errorf("new proxy: %w", err)
 	}
 
-	ln, err := net.Listen("tcp", "0.0.0.0:"+e.port)
+	addr, err := net.ResolveTCPAddr("tcp", "0.0.0.0:"+e.port)
+	if err != nil {
+		return fmt.Errorf("resolve addr :%s: %w", e.port, err)
+	}
+	tcpLn, err := net.ListenTCP("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("listen :%s: %w", e.port, err)
 	}
 
 	go func() {
 		<-ctx.Done()
-		ln.Close()
+		tcpLn.Close()
 		proxy.Shutdown()
 	}()
 
 	slog.Info("proxy started", "userId", e.userID, "port", e.port)
-	return proxy.Serve(ln)
+	return proxy.Serve(keepAliveListener{tcpLn})
 }
 
 func serveStats(counters map[string]*counter, tokens []string) http.HandlerFunc {

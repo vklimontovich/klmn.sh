@@ -8,14 +8,35 @@
     mode: "0710"
     state: directory
 
-# peers.d writable by manager so they can add/remove peer files directly
+# peers.d writable by manager so they can add/remove peer files directly.
+# The setgid bit keeps new files in the manager group.
 - name: Set peers.d group ownership to manager
   file:
     path: /etc/wireguard/peers.d
     owner: root
     group: manager
-    mode: "0770"
+    mode: "2770"
     state: directory
+
+# Some peers were provisioned manually as root before manager-based sync existed.
+# Normalize them so manager can update existing snippets as well as create new ones.
+- name: Find existing WireGuard peer files
+  find:
+    paths: /etc/wireguard/peers.d
+    patterns: "*.conf"
+    file_type: file
+  register: wg_peer_files
+
+- name: Make existing peer files manageable by manager
+  file:
+    path: "{{ item.path }}"
+    owner: manager
+    group: manager
+    mode: "0660"
+    state: file
+  loop: "{{ wg_peer_files.files }}"
+  loop_control:
+    label: "{{ item.path }}"
 
 # wg-sync calls wg syncconf which requires root
 - name: Allow manager to run wg-sync without password
