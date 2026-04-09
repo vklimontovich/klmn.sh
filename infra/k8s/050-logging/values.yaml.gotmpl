@@ -42,23 +42,36 @@ resources:
             Flush        5
             Daemon       Off
             Log_Level    warn
+            storage.path /var/lib/fluent-bit/storage
+            storage.sync normal
+            storage.checksum off
+            storage.max_chunks_up 8
+            storage.backlog.mem_limit 5M
 
         [INPUT]
             Name              tail
             Path              /var/log/pods/*/*/*.log
+            Exclude_Path      /var/log/pods/logging_fluent-bit-*/*/*.log
             multiline.parser  cri
             Tag               kube.*
             Path_Key          filepath
-            DB                /var/log/flb-state/state.db
+            DB                /var/lib/fluent-bit/tail.db
+            DB.sync           Normal
+            Read_from_Head    Off
+            storage.type      filesystem
+            storage.pause_on_chunks_overlimit Off
+            Buffer_Max_Size   256k
             Skip_Long_Lines   On
             Ignore_Older      1d
             Refresh_Interval  10
 
         [OUTPUT]
-            Name    forward
-            Match   *
-            Host    log-aggregator.logging.svc.cluster.local
-            Port    24224
+            Name                      forward
+            Match                     *
+            Host                      log-aggregator.logging.svc.cluster.local
+            Port                      24224
+            Retry_Limit               False
+            storage.total_limit_size  256M
 
   # ── Vector aggregator config ──────────────────────────────────────────────
 
@@ -135,7 +148,7 @@ resources:
                   mountPath: /var/log/containers
                   readOnly: true
                 - name: flbstate
-                  mountPath: /var/log/flb-state
+                  mountPath: /var/lib/fluent-bit
           volumes:
             - name: config
               configMap:
@@ -147,7 +160,9 @@ resources:
               hostPath:
                 path: /var/log/containers
             - name: flbstate
-              emptyDir: {}
+              hostPath:
+                path: /var/lib/fluent-bit
+                type: DirectoryOrCreate
 
   # ── Vector Deployment (aggregator, fatman only) ───────────────────────────
 

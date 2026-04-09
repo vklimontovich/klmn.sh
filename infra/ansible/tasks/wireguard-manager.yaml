@@ -38,11 +38,12 @@
   loop_control:
     label: "{{ item.path }}"
 
-# wg-sync calls wg syncconf which requires root
-- name: Allow manager to run wg-sync without password
+# wg-sync calls wg syncconf which requires root; wg show dump needed for traffic collection
+- name: Allow manager to run wg-sync and wg show without password
   copy:
     content: |
       manager ALL=(ALL) NOPASSWD: /usr/local/bin/wg-sync
+      manager ALL=(ALL) NOPASSWD: /usr/bin/wg show wg0 dump
     dest: /etc/sudoers.d/manager-wg
     mode: "0440"
     validate: visudo -cf %s
