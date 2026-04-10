@@ -1,0 +1,120 @@
+#!/bin/bash
+set -euo pipefail
+
+WG_INTERFACE="wg0"
+WG_SERVER_CIDR="{{ wg_server_cidr }}"
+WG_MTU="{{ wg_mtu }}"
+RULES_FILE="/etc/nftables.d/wg-relay.nft"
+RU_INCLUDE_FILE="/etc/nftables.d/wg-relay-ru.nft"
+RU_SOURCE_URL="https://www.ipdeny.com/ipblocks/data/countries/ru.zone"
+
+ensure_ru_include() {
+  if [[ -f "$RU_INCLUDE_FILE" ]]; then
+    return
+  fi
+
+  cat >"$RU_INCLUDE_FILE" <<'EOF'
+# Managed by /usr/local/bin/wg-relay refresh-ru.
+EOF
+}
+
+load_modules() {
+  modprobe nft_tproxy
+  modprobe nft_socket
+  modprobe nf_tproxy_ipv4
+}
+
+ensure_wg_interface() {
+  ip addr show "$WG_INTERFACE" | grep -qF "$WG_SERVER_CIDR" || ip addr add "$WG_SERVER_CIDR" dev "$WG_INTERFACE"
+  ip link set "$WG_INTERFACE" mtu "$WG_MTU"
+}
+
+ensure_policy_routing() {
+  while ip -4 rule show | grep -q 'fwmark 0x1 lookup 100'; do
+    ip -4 rule del fwmark 1 table 100 2>/dev/null || break
+  done
+
+  ip -4 rule add pref 100 fwmark 1 table 100
+  ip -4 route replace local 0.0.0.0/0 dev lo table 100
+}
+
+apply_ruleset() {
+  nft delete table ip wg_relay >/dev/null 2>&1 || true
+  nft -f "$RULES_FILE"
+}
+
+refresh_ru() {
+  local prefixes_file
+  local rendered_file
+  local prefix_count
+
+  prefixes_file=$(mktemp)
+  rendered_file=$(mktemp)
+
+  if ! curl -fsS "$RU_SOURCE_URL" -o "$prefixes_file"; then
+    rm -f "$prefixes_file" "$rendered_file"
+
+    if [[ ! -f "$RU_INCLUDE_FILE" ]]; then
+      ensure_ru_include
+    fi
+
+    echo "Failed to refresh RU prefixes; keeping existing nft include" >&2
+    apply
+    return 0
+  fi
+
+  {
+    echo "# Managed by /usr/local/bin/wg-relay refresh-ru."
+    awk '
+      NF {
+        if (count == 0) {
+          printf "add element ip wg_relay ru_bypass_v4 { %s", $1
+        } else {
+          printf ", %s", $1
+        }
+
+        count++
+        total++
+
+        if (count == 256) {
+          print " }"
+          count = 0
+        }
+      }
+
+      END {
+        if (count > 0) {
+          print " }"
+        }
+      }
+    ' "$prefixes_file"
+  } >"$rendered_file"
+
+  install -m 0644 "$rendered_file" "$RU_INCLUDE_FILE"
+  prefix_count=$(grep -cve '^[[:space:]]*$' "$prefixes_file")
+  rm -f "$prefixes_file" "$rendered_file"
+
+  echo "Loaded ${prefix_count} RU prefixes"
+  apply
+}
+
+apply() {
+  ensure_ru_include
+  load_modules
+  ensure_wg_interface
+  ensure_policy_routing
+  apply_ruleset
+}
+
+case "${1:-}" in
+  apply)
+    apply
+    ;;
+  refresh-ru)
+    refresh_ru
+    ;;
+  *)
+    echo "Usage: $0 {apply|refresh-ru}" >&2
+    exit 1
+    ;;
+esac

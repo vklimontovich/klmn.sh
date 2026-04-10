@@ -1,44 +1,19 @@
 ---
 - name: Install dependencies
   ansible.builtin.apt:
-    name: [ipset, unzip]
+    name: [curl, nftables, unzip]
     state: present
     update_cache: true
 
-- name: Write RU ipset update script
-  copy:
-    content: |
-      #!/bin/bash
-      set -e
-      TMPFILE=$(mktemp)
-      curl -sf https://www.ipdeny.com/ipblocks/data/countries/ru.zone -o "$TMPFILE"
-      COUNT=$(wc -l < "$TMPFILE")
-      {
-        echo "create ru-tmp hash:net maxelem 100000"
-        sed 's/^/add ru-tmp /' "$TMPFILE"
-        echo "create ru hash:net maxelem 100000"
-        echo "swap ru-tmp ru"
-        echo "destroy ru-tmp"
-      } | ipset restore -!
-      rm -f "$TMPFILE"
-      echo "Loaded $COUNT RU prefixes"
-    dest: /usr/local/bin/update-ru-ipset.sh
+- name: Create xray-client config directory
+  ansible.builtin.file:
+    path: /etc/xray-client
+    state: directory
     mode: "0755"
 
-- name: Run initial RU ipset population
-  command: /usr/local/bin/update-ru-ipset.sh
-  changed_when: false
-
-- name: Schedule daily RU ipset refresh
-  copy:
-    content: |
-      0 3 * * * root /usr/local/bin/update-ru-ipset.sh >> /var/log/ru-ipset-update.log 2>&1
-    dest: /etc/cron.d/ru-ipset-update
-    mode: "0644"
-
-- name: Create xray-client config directory
-  file:
-    path: /etc/xray-client
+- name: Create nftables config directory
+  ansible.builtin.file:
+    path: /etc/nftables.d
     state: directory
     mode: "0755"
 
@@ -54,7 +29,7 @@
 - name: Write xray-client config
   # UDP traffic still rides a TCP-based REALITY transport here. That is fine for
   # baseline relay correctness, but it is not native QUIC or HTTP/3 support.
-  copy:
+  ansible.builtin.copy:
     content: |
       {
         "log": {
@@ -158,19 +133,19 @@
 - name: Download and install xray binary
   block:
     - name: Get latest xray release URL
-      uri:
+      ansible.builtin.uri:
         url: https://api.github.com/repos/XTLS/Xray-core/releases/latest
         return_content: true
       register: xray_release
 
     - name: Download xray zip
-      get_url:
+      ansible.builtin.get_url:
         url: "{{ xray_release.json.assets | selectattr('name', 'equalto', 'Xray-linux-64.zip') | map(attribute='browser_download_url') | first }}"
         dest: /tmp/xray-linux-64.zip
         force: true
 
     - name: Extract xray binary
-      unarchive:
+      ansible.builtin.unarchive:
         src: /tmp/xray-linux-64.zip
         dest: /usr/local/bin
         include:
@@ -180,17 +155,17 @@
       notify: Restart xray-client
 
     - name: Clean up zip
-      file:
+      ansible.builtin.file:
         path: /tmp/xray-linux-64.zip
         state: absent
 
 - name: Write xray-client systemd service
-  copy:
+  ansible.builtin.copy:
     content: |
       [Unit]
       Description=Xray client (VLESS+Reality outbound)
-      After=network.target wg-tproxy.service
-      Wants=wg-tproxy.service
+      After=network-online.target wg-tproxy.service
+      Wants=network-online.target wg-tproxy.service
 
       [Service]
       ExecStart=/usr/local/bin/xray run -c /etc/xray-client/config.json
@@ -206,173 +181,75 @@
     mode: "0644"
   notify: Restart xray-client
 
-- name: Write wg-tproxy start script
-  copy:
+- name: Write wg-relay nftables ruleset
+  ansible.builtin.template:
+    src: wg-relay.nft.j2
+    dest: /etc/nftables.d/wg-relay.nft
+    mode: "0644"
+  notify: Restart wg-tproxy
+
+- name: Initialize RU nftables include
+  ansible.builtin.copy:
     content: |
-      #!/bin/bash
-      set -euo pipefail
+      # Managed by /usr/local/bin/wg-relay refresh-ru.
+    dest: /etc/nftables.d/wg-relay-ru.nft
+    mode: "0644"
+    force: false
 
-      # Load kernel modules needed for TPROXY (transparent proxy without NAT).
-      # xt_TPROXY: the TPROXY iptables target itself.
-      # xt_socket: lets the kernel match packets that belong to a local socket,
-      #   required so TPROXY can hand off packets to the listening process.
-      modprobe xt_TPROXY
-      modprobe xt_socket
-
-      # Keep wg0 aligned with the intended server-side interface settings.
-      # wg0.conf now remains a full wg-quick file, but reasserting these values
-      # here lets a wg-tproxy restart repair pre-existing drift as well.
-      ip addr show wg0 | grep -qF '{{ wg_server_cidr }}' \
-        || ip addr add {{ wg_server_cidr }} dev wg0
-
-      # MTU is a wg-quick directive rather than a WireGuard protocol field.
-      # Set it explicitly so wg-tproxy restarts keep the live interface honest.
-      ip link set wg0 mtu {{ wg_mtu }}
-
-      # Fetch current RU IP ranges into the 'ru' ipset.
-      # Done on every start so the list survives reboots (ipset is in-memory only).
-      /usr/local/bin/update-ru-ipset.sh
-
-      # Policy routing: packets marked with fwmark=1 use routing table 100.
-      # First remove any drifted duplicates, then install the exact rule we want
-      # at a fixed priority so inspection and teardown stay deterministic.
-      while ip -4 rule show | grep -q 'fwmark 0x1 lookup 100'; do
-        ip -4 rule del fwmark 1 table 100 2>/dev/null || break
-      done
-      ip -4 rule add pref 100 fwmark 1 table 100
-
-      # In table 100, route everything to lo (loopback).
-      # This makes the kernel treat TPROXY-marked packets as destined for this
-      # host, so Xray's listening socket can receive them.
-      ip -4 route replace local 0.0.0.0/0 dev lo table 100
-
-      # Client-local and special-use destinations should never be proxied.
-      # Do not blanket-bypass 10.0.0.0/8 here because WireGuard itself lives
-      # inside that space and is already handled by the explicit wg_subnet rule.
-      local_bypass_cidrs=(
-        127.0.0.0/8
-        169.254.0.0/16
-        172.16.0.0/12
-        192.168.0.0/16
-        198.18.0.0/15
-        100.64.0.0/10
-        224.0.0.0/4
-        255.255.255.255/32
-      )
-
-      # Rebuild the PREROUTING section we own so bypass order is deterministic.
-      while iptables -t mangle -D PREROUTING -i wg0 -d {{ wg_subnet }} -j RETURN 2>/dev/null; do :; done
-      while iptables -t mangle -D PREROUTING -i wg0 -d {{ enter_exit_host_ipv4 }}/32 -j RETURN 2>/dev/null; do :; done
-      for cidr in "${local_bypass_cidrs[@]}"; do
-        while iptables -t mangle -D PREROUTING -i wg0 -d "$cidr" -j RETURN 2>/dev/null; do :; done
-      done
-      while iptables -t mangle -D PREROUTING -i wg0 -m set --match-set ru dst -j RETURN 2>/dev/null; do :; done
-      while iptables -t mangle -D PREROUTING -i wg0 -p tcp -j TPROXY --on-port 1080 --tproxy-mark 1 2>/dev/null; do :; done
-      while iptables -t mangle -D PREROUTING -i wg0 -p udp -j TPROXY --on-port 1080 --tproxy-mark 1 2>/dev/null; do :; done
-
-      # Insert in reverse order so the final top-down chain is:
-      # 1) WireGuard subnet bypass
-      # 2) Exit-host bypass
-      # 3) Client-local and special-use destination bypasses
-      # 4) RU bypass
-      # 5) Generic TCP TPROXY
-      # 6) Generic UDP TPROXY
-      iptables -t mangle -I PREROUTING 1 -i wg0 -p udp -j TPROXY --on-port 1080 --tproxy-mark 1
-      iptables -t mangle -I PREROUTING 1 -i wg0 -p tcp -j TPROXY --on-port 1080 --tproxy-mark 1
-      iptables -t mangle -I PREROUTING 1 -i wg0 -m set --match-set ru dst -j RETURN
-      for cidr in \
-        255.255.255.255/32 \
-        224.0.0.0/4 \
-        100.64.0.0/10 \
-        198.18.0.0/15 \
-        192.168.0.0/16 \
-        172.16.0.0/12 \
-        169.254.0.0/16 \
-        127.0.0.0/8; do
-        iptables -t mangle -I PREROUTING 1 -i wg0 -d "$cidr" -j RETURN
-      done
-      iptables -t mangle -I PREROUTING 1 -i wg0 -d {{ enter_exit_host_ipv4 }}/32 -j RETURN
-      iptables -t mangle -I PREROUTING 1 -i wg0 -d {{ wg_subnet }} -j RETURN
-
-      # MASQUERADE: rewrite the source IP of direct traffic (RU IPs, ICMP) to the
-      # server's outbound IP. Without this, reply packets would go to 10.8.0.x
-      # (the WireGuard client IP), which the internet doesn't know how to reach.
-      iptables -t nat -C POSTROUTING -s {{ wg_subnet }} -j MASQUERADE 2>/dev/null \
-        || iptables -t nat -A POSTROUTING -s {{ wg_subnet }} -j MASQUERADE
-
-      # Allow WireGuard traffic through the FORWARD chain.
-      # UFW sets FORWARD policy to DROP by default; these rules punch holes for wg0.
-      iptables -C FORWARD -i wg0 -j ACCEPT 2>/dev/null \
-        || iptables -I FORWARD 1 -i wg0 -j ACCEPT
-      iptables -C FORWARD -o wg0 -j ACCEPT 2>/dev/null \
-        || iptables -I FORWARD 2 -o wg0 -j ACCEPT
-
-      # MSS clamping: WireGuard adds overhead (~60 bytes) that reduces the effective
-      # MTU. Large packets on the direct (non-TPROXY) path would be silently dropped
-      # without this. Clamping MSS to PMTU forces TCP to negotiate a smaller segment
-      # size and avoids fragmentation issues on both directions.
-      iptables -t mangle -C FORWARD -i wg0 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null \
-        || iptables -t mangle -A FORWARD -i wg0 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
-      iptables -t mangle -C FORWARD -o wg0 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null \
-        || iptables -t mangle -A FORWARD -o wg0 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
-    dest: /usr/local/bin/wg-tproxy-start.sh
+- name: Write wg-relay helper
+  ansible.builtin.template:
+    src: wg-relay.sh.j2
+    dest: /usr/local/bin/wg-relay
     mode: "0755"
   notify: Restart wg-tproxy
 
-- name: Write wg-tproxy stop script
-  copy:
+- name: Validate wg-relay nftables ruleset
+  ansible.builtin.command: nft -c -f /etc/nftables.d/wg-relay.nft
+  changed_when: false
+
+- name: Check for legacy wg-tproxy teardown helper
+  ansible.builtin.stat:
+    path: /usr/local/bin/wg-tproxy-stop.sh
+  register: legacy_wg_tproxy_stop
+
+- name: Run legacy wg-tproxy teardown before nftables cutover
+  ansible.builtin.command: /usr/local/bin/wg-tproxy-stop.sh
+  when: legacy_wg_tproxy_stop.stat.exists
+
+- name: Remove legacy RU refresh cron
+  ansible.builtin.file:
+    path: /etc/cron.d/ru-ipset-update
+    state: absent
+
+- name: Schedule daily RU nftables refresh
+  ansible.builtin.copy:
     content: |
-      #!/bin/bash
-      set -euo pipefail
+      0 3 * * * root /usr/local/bin/wg-relay refresh-ru >> /var/log/wg-relay-refresh.log 2>&1
+    dest: /etc/cron.d/wg-relay-refresh
+    mode: "0644"
 
-      # Remove all rules added by the start script, in reverse order.
-      # '|| true' everywhere so partial teardown doesn't abort on missing rules.
-
-      local_bypass_cidrs=(
-        127.0.0.0/8
-        169.254.0.0/16
-        172.16.0.0/12
-        192.168.0.0/16
-        198.18.0.0/15
-        100.64.0.0/10
-        224.0.0.0/4
-        255.255.255.255/32
-      )
-
-      while iptables -t mangle -D FORWARD -o wg0 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null; do :; done
-      while iptables -t mangle -D FORWARD -i wg0 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null; do :; done
-      while iptables -D FORWARD -o wg0 -j ACCEPT 2>/dev/null; do :; done
-      while iptables -D FORWARD -i wg0 -j ACCEPT 2>/dev/null; do :; done
-      while iptables -t nat -D POSTROUTING -s {{ wg_subnet }} -j MASQUERADE 2>/dev/null; do :; done
-      while iptables -t mangle -D PREROUTING -i wg0 -p udp -j TPROXY --on-port 1080 --tproxy-mark 1 2>/dev/null; do :; done
-      while iptables -t mangle -D PREROUTING -i wg0 -p tcp -j TPROXY --on-port 1080 --tproxy-mark 1 2>/dev/null; do :; done
-      while iptables -t mangle -D PREROUTING -i wg0 -m set --match-set ru dst -j RETURN 2>/dev/null; do :; done
-      for cidr in "${local_bypass_cidrs[@]}"; do
-        while iptables -t mangle -D PREROUTING -i wg0 -d "$cidr" -j RETURN 2>/dev/null; do :; done
-      done
-      while iptables -t mangle -D PREROUTING -i wg0 -d {{ enter_exit_host_ipv4 }}/32 -j RETURN 2>/dev/null; do :; done
-      while iptables -t mangle -D PREROUTING -i wg0 -d {{ wg_subnet }} -j RETURN 2>/dev/null; do :; done
-      ip -4 route del local 0.0.0.0/0 dev lo table 100 2>/dev/null || true
-      ip -4 rule del pref 100 fwmark 1 table 100 2>/dev/null || true
-    dest: /usr/local/bin/wg-tproxy-stop.sh
-    mode: "0755"
-  notify: Restart wg-tproxy
+- name: Remove legacy wg-tproxy helper scripts
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /usr/local/bin/update-ru-ipset.sh
+    - /usr/local/bin/wg-tproxy-start.sh
+    - /usr/local/bin/wg-tproxy-stop.sh
 
 - name: Write wg-tproxy systemd unit
-  copy:
+  ansible.builtin.copy:
     content: |
       [Unit]
       Description=WireGuard tproxy routing rules
-      After=network.target wg-quick@wg0.service docker.service
-      Wants=wg-quick@wg0.service
+      After=network-online.target systemd-networkd.service wg-quick@wg0.service docker.service
+      Wants=network-online.target wg-quick@wg0.service
+      PartOf=systemd-networkd.service wg-quick@wg0.service
 
       [Service]
       Type=oneshot
       RemainAfterExit=yes
-      ExecStartPre=/sbin/modprobe xt_TPROXY
-      ExecStartPre=/sbin/modprobe xt_socket
-      ExecStart=/usr/local/bin/wg-tproxy-start.sh
-      ExecStop=/usr/local/bin/wg-tproxy-stop.sh
+      ExecStart=/usr/local/bin/wg-relay apply
 
       [Install]
       WantedBy=multi-user.target
@@ -380,15 +257,21 @@
     mode: "0644"
   notify: Restart wg-tproxy
 
+- name: Run initial RU nftables refresh
+  ansible.builtin.command: /usr/local/bin/wg-relay refresh-ru
+
+- name: Flush service restarts
+  meta: flush_handlers
+
 - name: Enable and start wg-tproxy
-  systemd:
+  ansible.builtin.systemd:
     name: wg-tproxy
     enabled: true
     state: started
     daemon_reload: true
 
 - name: Enable and start xray-client
-  systemd:
+  ansible.builtin.systemd:
     name: xray-client
     enabled: true
     state: started

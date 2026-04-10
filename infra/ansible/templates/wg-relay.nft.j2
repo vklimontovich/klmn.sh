@@ -1,0 +1,50 @@
+table ip wg_relay {
+  set static_bypass_v4 {
+    type ipv4_addr
+    flags interval
+    elements = {
+      {{ wg_subnet }},
+      {{ enter_exit_host_ipv4 }}/32,
+      127.0.0.0/8,
+      169.254.0.0/16,
+      172.16.0.0/12,
+      192.168.0.0/16,
+      198.18.0.0/15,
+      100.64.0.0/10,
+      224.0.0.0/4,
+      255.255.255.255/32
+    }
+  }
+
+  set ru_bypass_v4 {
+    type ipv4_addr
+    flags interval
+  }
+
+  chain prerouting {
+    type filter hook prerouting priority mangle; policy accept;
+    iifname "wg0" ip daddr @static_bypass_v4 return
+    iifname "wg0" ip daddr @ru_bypass_v4 return
+    iifname "wg0" ip protocol tcp meta mark set 0x1 tproxy to :1080
+    iifname "wg0" ip protocol udp meta mark set 0x1 tproxy to :1080
+  }
+
+  chain forward_mangle {
+    type filter hook forward priority mangle; policy accept;
+    iifname "wg0" tcp flags syn / syn,rst tcp option maxseg size set rt mtu
+    oifname "wg0" tcp flags syn / syn,rst tcp option maxseg size set rt mtu
+  }
+
+  chain forward_filter {
+    type filter hook forward priority filter; policy accept;
+    iifname "wg0" accept
+    oifname "wg0" accept
+  }
+
+  chain postrouting {
+    type nat hook postrouting priority srcnat; policy accept;
+    ip saddr {{ wg_subnet }} masquerade
+  }
+}
+
+include "/etc/nftables.d/wg-relay-ru.nft"

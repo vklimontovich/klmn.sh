@@ -129,8 +129,10 @@
       systemd:
         name: wg-tproxy
         state: restarted
+        daemon_reload: true
 
     - name: Restart xray-client
       systemd:
         name: xray-client
         state: restarted
+        daemon_reload: true
