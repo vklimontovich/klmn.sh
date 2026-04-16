@@ -41,7 +41,7 @@ export type CvCopy = {
 export const cvCopy: Record<string, CvCopy> = {
   default: {
     name: "Vladimir Klimontovich",
-    location: "Brooklyn, NY (authorized to work in the US)",
+    location: "Brooklyn, NY",
     shortDescription:
       "Hands-on engineering leader with 20+ years building high-scale distributed systems and products. Founded two companies—one YC-backed, another scaled to $4M ARR.",
     contact: {
@@ -52,10 +52,10 @@ export const cvCopy: Record<string, CvCopy> = {
     },
     intro: (
       <>
-        Engineering leader and repeat founder with 20+ years building high-scale distributed systems and product
-        engineering teams. Hands-on with code and architecture, and experienced scaling orgs from early stage. Built
-        systems handling 1M req/sec, grew a startup to $4M ARR, and led distributed teams across. Two-time founder,
-        including the Y Combinator–backed Jitsu (YC S20) and one exit.
+        2× founder (1 exit, 1 YC-backed) and engineer and engineering leader with 20+ years building high-scale
+        distributed systems and product engineering teams. Hands-on with code and architecture, experienced scaling
+        orgs from early stage. Built systems handling 1M req/sec, grew a startup to $4M ARR, and led distributed
+        teams.
       </>
     ),
     expertise: {
