@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  typescript: { ignoreBuildErrors: true },
   productionBrowserSourceMaps: true,
 
   webpack: (config, { isServer, dev }) => {

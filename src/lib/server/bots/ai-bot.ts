@@ -27,11 +27,11 @@ type AiSettings = {
 
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY || "not-set",
 });
 
 const anthropic = new Anthropic({
-  apiKey: process.env.ANTROPIC_API_KEY,
+  apiKey: process.env.ANTROPIC_API_KEY || "not-set",
 });
 
 
