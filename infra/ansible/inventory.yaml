@@ -5,15 +5,8 @@ all:
         fatman.klmn.sh:
     workers:
       hosts:
-        dc.vpnclub.org:
-          tailscale_exit_node: true
-          open_ports:
-            - port: "6362"
-              proto: both
-              comment: "Shadowbox access keys"
-            - port: "19243"
-              proto: tcp
-              comment: "Shadowbox management API"
+        ny-res.greatinet.org:
+        salmon.greatinet.org:
         nl.vpnclub.org:
           ansible_user: cloud-user
           tailscale_exit_node: true
@@ -24,10 +17,6 @@ all:
             - port: "33287"
               proto: tcp
               comment: "Shadowbox management API"
-        mrdr.greatinet.org:
-          out_of_tailnet: true
-          xray_docker: true
-          xray_dest: "ftp.acc.umu.se:443"
         dolma.greatinet.org:
     enter:
       hosts:
