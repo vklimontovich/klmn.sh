@@ -80,6 +80,31 @@ releases:
     version: "2.0.0"
     needs:
       - database/postgresql
+    hooks:
+      - events: ["presync"]
+        showlogs: true
+        command: "/bin/bash"
+        args:
+          - "-c"
+          - |
+            set -e
+            NS=database
+            # Create a narrow analytics_role for PostgREST: SELECT/INSERT/UPDATE/DELETE
+            # on the public.analytics table only. Issue JWTs with claim
+            # {"role":"analytics_role"} so Nextlytics can write events without
+            # gaining access to every other table on the public schema.
+            kubectl exec -n $NS postgresql-0 -c postgresql -- env PGPASSWORD="$(kubectl get secret -n $NS postgresql-password -o jsonpath='{.data.postgres-password}' | base64 -d)" psql -v ON_ERROR_STOP=1 -U postgres -d taxgent <<'SQL'
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'analytics_role') THEN
+                    CREATE ROLE analytics_role NOLOGIN;
+                END IF;
+            END
+            $$;
+            GRANT analytics_role TO postgres;
+            GRANT USAGE ON SCHEMA public TO analytics_role;
+            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.analytics TO analytics_role;
+            SQL
     values:
       - resources:
           - apiVersion: apps/v1
