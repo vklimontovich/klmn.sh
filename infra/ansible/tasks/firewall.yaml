@@ -1,4 +1,13 @@
 ---
+# Source CIDRs that bypass rate limits. Tailnet for human/admin access,
+# k3s pod/service CIDRs for the rare in-cluster traffic that escapes
+# kube-proxy short-circuit and reaches the NodePort via the host network.
+- name: Set firewall vars
+  ansible.builtin.set_fact:
+    tailnet_cidr: "100.64.0.0/10"
+    k3s_pod_cidr: "10.42.0.0/16"
+    k3s_svc_cidr: "10.43.0.0/16"
+
 # Disable IPv6 system-wide
 - name: Disable IPv6
   ansible.posix.sysctl:
@@ -36,13 +45,22 @@
   community.general.ufw:
     state: reset
 
-# Re-add SSH immediately after reset
-- name: Allow SSH (post-reset)
+# Re-add SSH immediately after reset. Tailnet bypass first (no rate limit),
+# then UFW's built-in `limit` for public traffic (6 new conns/30s/src).
+- name: Allow SSH from tailnet (no rate limit)
   community.general.ufw:
     rule: allow
+    from_ip: "{{ tailnet_cidr }}"
     port: "22"
     proto: tcp
-    comment: "SSH"
+    comment: "SSH from tailnet"
+
+- name: Rate-limit SSH from public sources
+  community.general.ufw:
+    rule: limit
+    port: "22"
+    proto: tcp
+    comment: "SSH (rate limit)"
 
 # Common ports for tailnet nodes
 - name: Allow common ports (tailnet nodes)
@@ -58,7 +76,6 @@
       - { port: "10250", proto: tcp, comment: "Kubelet" }
       - { port: "10255", proto: tcp, comment: "Kubelet metrics" }
       - { port: "8472", proto: udp, comment: "Flannel VXLAN" }
-      - { port: "30432", proto: tcp, comment: "NodePort PostgreSQL" }
       - { port: "30548", proto: tcp, comment: "NodePort xray" }
   community.general.ufw:
     rule: allow
@@ -104,6 +121,40 @@
     comment: "{{ item.comment | default('custom') }}"
   loop: "{{ open_ports | default([]) }}"
   when: item.proto is defined and item.proto in ['udp', 'both']
+
+# Postgres NodePort (30432): protect from credential-stuffing without
+# breaking the cluster or local testing.
+#
+#   - Tailnet + k3s pod/svc CIDRs are accepted unconditionally in
+#     before.rules (runs before the hashlimit so trusted sources never
+#     consume budget).
+#   - Everyone else is throttled per-source-IP via xt_hashlimit:
+#     60 new conns/min with a burst of 120. A normal psql session opens
+#     1 connection; a brute-force scanner trying many user/pass combos
+#     will saturate the bucket in seconds and get DROP'd. Tunable via
+#     the --hashlimit-above / --hashlimit-burst values below.
+- name: Custom per-source rate limit for Postgres NodePort (30432)
+  ansible.builtin.blockinfile:
+    path: /etc/ufw/before.rules
+    insertbefore: "^# don't delete the 'COMMIT' line"
+    marker: "# {mark} ANSIBLE MANAGED - postgres NodePort rate limit"
+    block: |2
+      # Trusted sources bypass the hashlimit
+      -A ufw-before-input -p tcp --dport 30432 -s {{ tailnet_cidr }} -j ACCEPT
+      -A ufw-before-input -p tcp --dport 30432 -s {{ k3s_pod_cidr }} -j ACCEPT
+      -A ufw-before-input -p tcp --dport 30432 -s {{ k3s_svc_cidr }} -j ACCEPT
+      # Public sources: drop new connections exceeding 60/min per source IP (burst 120)
+      -A ufw-before-input -p tcp --dport 30432 -m conntrack --ctstate NEW \
+        -m hashlimit --hashlimit-above 60/minute --hashlimit-burst 120 \
+        --hashlimit-mode srcip --hashlimit-name pg_rate -j DROP
+
+- name: Allow Postgres NodePort (rate-limited via before.rules)
+  community.general.ufw:
+    rule: allow
+    port: "30432"
+    proto: tcp
+    comment: "NodePort PostgreSQL (rate-limited)"
+  when: not (out_of_tailnet | default(false))
 
 # Enable UFW only after all rules are in place
 - name: Set default deny incoming
