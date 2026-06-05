@@ -165,9 +165,12 @@ func startProxy(ctx context.Context, e entry, c *counter, ntw mtglib.Network, ar
 		IPBlocklist:     ipblocklist.NewNoop(),
 		IPAllowlist:     allowAll{},
 		EventStream:     stream,
-		Logger:          logger.NewZeroLogger(zerolog.New(os.Stderr).With().Timestamp().Str("port", e.port).Logger()),
+		Logger:          logger.NewZeroLogger(zerolog.New(os.Stderr).Level(zerolog.InfoLevel).With().Timestamp().Str("port", e.port).Logger()),
 		Concurrency:     100,
 		IdleTimeout:     2 * time.Minute,
+		// Personal proxies: tolerate clients with badly-skewed device clocks
+		// (mtg's default is only 3s; we've seen real clients ~22s off).
+		TolerateTimeSkewness: 10 * time.Minute,
 	})
 	if err != nil {
 		return fmt.Errorf("new proxy: %w", err)
