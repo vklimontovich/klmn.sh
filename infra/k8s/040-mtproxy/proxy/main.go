@@ -23,6 +23,7 @@ import (
 	"github.com/9seconds/mtg/v2/logger"
 	"github.com/9seconds/mtg/v2/mtglib"
 	networkv2 "github.com/9seconds/mtg/v2/network/v2"
+	"github.com/rs/zerolog"
 )
 
 const configPath = "/config/secrets.txt"
@@ -164,7 +165,7 @@ func startProxy(ctx context.Context, e entry, c *counter, ntw mtglib.Network, ar
 		IPBlocklist:     ipblocklist.NewNoop(),
 		IPAllowlist:     allowAll{},
 		EventStream:     stream,
-		Logger:          logger.NewNoopLogger(),
+		Logger:          logger.NewZeroLogger(zerolog.New(os.Stderr).With().Timestamp().Str("port", e.port).Logger()),
 		Concurrency:     100,
 		IdleTimeout:     2 * time.Minute,
 	})
