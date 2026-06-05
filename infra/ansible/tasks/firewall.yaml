@@ -11,6 +11,20 @@
     - net.ipv6.conf.all.disable_ipv6
     - net.ipv6.conf.default.disable_ipv6
 
+# The all/default toggles above do NOT flush a global address an interface already
+# grabbed via router advertisement at boot (kernel quirk). On residential nodes (e.g.
+# ny-res behind a GL router handing out a dead IPv6 prefix) this leaves a broken global
+# v6 address, which makes mtg/mtproxy hang dialing Telegram over v6. The per-interface
+# toggle DOES flush it, so disable v6 explicitly on the default-route interface too.
+- name: Disable IPv6 on the primary interface (flushes RA-assigned address)
+  ansible.posix.sysctl:
+    name: "net.ipv6.conf.{{ ansible_default_ipv4.interface }}.disable_ipv6"
+    value: "1"
+    state: present
+    sysctl_set: true
+    reload: true
+  when: ansible_default_ipv4.interface is defined
+
 # SAFETY: Always ensure SSH access before any firewall changes
 
 - name: Install UFW
