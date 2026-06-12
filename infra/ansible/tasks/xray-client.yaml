@@ -82,8 +82,7 @@
                 "publicKey": "{{ enter_vless_public_key }}",
                 "shortId": "{{ enter_vless_short_id }}"
               }
-            },
-            "mux": {"enabled": true, "concurrency": 16, "xudpConcurrency": 16}
+            }
           },
           {
             "tag": "vless-udp",
@@ -112,7 +111,6 @@
                 "shortId": "{{ enter_vless_short_id }}"
               }
             },
-            "mux": {"enabled": true, "concurrency": 16, "xudpConcurrency": 16}
           },
           {
             "tag": "direct",
