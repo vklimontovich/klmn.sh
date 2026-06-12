@@ -7,17 +7,6 @@ all:
       hosts:
         ny-res.greatinet.org:
         salmon.greatinet.org:
-        nl.vpnclub.org:
-          ansible_user: cloud-user
-          tailscale_exit_node: true
-          open_ports:
-            - port: "45383"
-              proto: both
-              comment: "Shadowbox access keys"
-            - port: "33287"
-              proto: tcp
-              comment: "Shadowbox management API"
-        dolma.greatinet.org:
     enter:
       hosts:
         enter.greatinet.org:

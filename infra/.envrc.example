@@ -24,4 +24,14 @@ export LETSENCRYPT_EMAIL=your-email@example.com
 # export GCS_BACKUP_BUCKET=backups.pg.klmn.sh
 
 # MTProxy stats endpoint auth token (X-Admin-Token header), comma-separated for multiple
-export ADMIN_INTERFACE_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+export ADMIN_INTERFACE_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# enter.greatinet.org VLESS+REALITY exit (xray-client outbound)
+# Point enter at one of the k8s xray exit nodes (a node-role=vpn-node host).
+# UUID/public-key/short-id must match the xray REALITY server config (k8s/030-xray);
+# SNI must be one of that server's serverNames.
+export ENTER_EXIT_HOST=salmon.greatinet.org
+export ENTER_VLESS_SNI=helsinki.fi
+export ENTER_VLESS_UUID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+export ENTER_VLESS_PUBLIC_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+export ENTER_VLESS_SHORT_ID=xxxxxxxxxx
