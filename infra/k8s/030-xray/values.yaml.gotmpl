@@ -118,6 +118,15 @@ resources:
               operator: "Equal"
               value: "vpn-node"
               effect: "NoSchedule"
+          # Resolve via public DNS, never CoreDNS. REALITY dials `dest` (a hostname)
+          # on every inbound connection, using the Go system resolver — so with
+          # ClusterFirst an unreachable CoreDNS takes the whole exit node down.
+          # Exit nodes only ever resolve public names; they need nothing in-cluster.
+          dnsPolicy: "None"
+          dnsConfig:
+            nameservers:
+              - 8.8.8.8
+              - 1.1.1.1
           initContainers:
             - name: config-render
               image: alpine:latest

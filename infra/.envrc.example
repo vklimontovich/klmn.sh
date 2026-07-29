@@ -1,6 +1,6 @@
 # GitHub token for GHCR registry authentication
 # Get it: https://github.com/settings/tokens -> Generate new token (classic) -> select read:packages
-export can=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+export GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 # Tailscale auth key to join nodes to your tailnet
 # Get it: https://login.tailscale.com/admin/settings/keys -> Generate auth key
@@ -24,14 +24,19 @@ export LETSENCRYPT_EMAIL=your-email@example.com
 # export GCS_BACKUP_BUCKET=backups.pg.klmn.sh
 
 # MTProxy stats endpoint auth token (X-Admin-Token header), comma-separated for multiple
-export ADMIN_INTERFACE_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+export ADMIN_INTERFACE_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
-# enter.greatinet.org VLESS+REALITY exit (xray-client outbound)
-# Point enter at one of the k8s xray exit nodes (a node-role=vpn-node host).
-# UUID/public-key/short-id must match the xray REALITY server config (k8s/030-xray);
-# SNI must be one of that server's serverNames.
+# --- enter (WireGuard relay) -> VLESS exit ---
+# The exit node that `enter` tunnels client traffic to. Must be a live xray
+# REALITY node, and SNI must be one of that node's serverNames — ideally
+# matching its REALITY `dest` (see the xray-node-dests ConfigMap).
 export ENTER_EXIT_HOST=salmon.greatinet.org
 export ENTER_VLESS_SNI=investing.com
+
+# Credentials for the enter relay's VLESS client. UUID must exist in the
+# xray-users ConfigMap; public key/short id come from the xray-credentials secret:
+#   kubectl get secret xray-credentials -n xray -o jsonpath='{.data.public-key}' | base64 -d
+#   kubectl get secret xray-credentials -n xray -o jsonpath='{.data.short-id}'   | base64 -d
 export ENTER_VLESS_UUID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 export ENTER_VLESS_PUBLIC_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-export ENTER_VLESS_SHORT_ID=xxxxxxxxxx
+export ENTER_VLESS_SHORT_ID=xxxxxxxx

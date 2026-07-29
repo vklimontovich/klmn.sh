@@ -125,6 +125,40 @@
   when: inventory_hostname in groups['workers'] and not (out_of_tailnet | default(false))
   notify: Restart K3s
 
+# flannel binds to tailscale0 (flannel-iface above) but only reads the interface
+# once, at startup. If k3s starts while Tailscale has no address, flannel never
+# creates flannel.1 and never retries — cross-node pod traffic stays dead until
+# someone restarts k3s by hand.
+- name: Determine K3s service name
+  set_fact:
+    k3s_service_name: "{{ 'k3s' if inventory_hostname in groups['master'] else 'k3s-agent' }}"
+
+- name: Ensure K3s systemd drop-in directory exists
+  file:
+    path: "/etc/systemd/system/{{ k3s_service_name }}.service.d"
+    state: directory
+    mode: "0755"
+
+- name: Order K3s startup after Tailscale is addressable
+  copy:
+    content: |
+      [Unit]
+      After=tailscaled.service
+      Wants=tailscaled.service
+
+      [Service]
+      # Bounded wait for tailscale0 to get an IPv4 before flannel reads it.
+      # Gives up after ~120s so a Tailscale outage cannot block k3s forever.
+      ExecStartPre=/bin/sh -c 'i=0; while [ $i -lt 60 ]; do ip -4 addr show tailscale0 2>/dev/null | grep -q "inet " && exit 0; i=$((i+1)); sleep 2; done; exit 0'
+    dest: "/etc/systemd/system/{{ k3s_service_name }}.service.d/10-tailscale-ordering.conf"
+    mode: "0644"
+  register: k3s_tailscale_dropin
+
+- name: Reload systemd after K3s drop-in change
+  systemd:
+    daemon_reload: true
+  when: k3s_tailscale_dropin.changed
+
 - name: Configure K3s registries for GHCR
   copy:
     content: |
