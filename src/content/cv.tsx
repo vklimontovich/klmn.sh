@@ -43,7 +43,7 @@ export const cvCopy: Record<string, CvCopy> = {
     name: "Vladimir Klimontovich",
     location: "Brooklyn, NY",
     shortDescription:
-      "Hands-on engineering leader with 20+ years building high-scale distributed systems and products. Founded two companies—one YC-backed, another scaled to $4M ARR.",
+      "Hands-on engineering leader with 20+ years building high-scale distributed systems and products. Founded two companies, both acquired—one YC-backed, another scaled to $4M ARR.",
     contact: {
       email: "v@klmn.sh",
       phone: "929.266.9175",
@@ -52,20 +52,19 @@ export const cvCopy: Record<string, CvCopy> = {
     },
     intro: (
       <>
-        2× founder (1 exit, 1 YC-backed) and engineer and engineering leader with 20+ years building high-scale
-        distributed systems and product engineering teams. Hands-on with code and architecture, experienced scaling
-        orgs from early stage. Built systems handling 1M req/sec, grew a startup to $4M ARR, and led distributed
-        teams.
+        Engineering leader and 2× founder, both companies acquired (one YC-backed). 20+ years building high-scale
+        distributed systems, now focused on production AI agents. Built an ad exchange that handled 1M req/sec, grew a
+        startup to $4M ARR, and scaled engineering teams from zero.
       </>
     ),
     expertise: {
       items: [
         <>
-          <b>AI:</b> Deep expertise in LLM internals and production AI agents. Built multiple <Kw>MCP</Kw> servers and
-          agent systems and RAG-pipelines
+          <b>AI:</b> Took an AI agent from prototype to production for two companies. Built several <Kw>MCP</Kw>{" "}
+          servers, agent systems, and <Kw>RAG</Kw> pipelines
         </>,
         <>
-          <b>Technical Leadership and Architecture:</b> Scaled teams to 30+ engineers, architected distributed systems
+          <b>Technical Leadership and Architecture:</b> Scaled teams to 30 engineers, architected distributed systems
           processing 1M+ requests/second
         </>,
         <>
@@ -77,8 +76,8 @@ export const cvCopy: Record<string, CvCopy> = {
           with <Kw>BigQuery</Kw>, <Kw>Kafka</Kw>, <Kw>Hadoop</Kw>, <Kw>ClickHouse</Kw>
         </>,
         <>
-          <b>Product Leadership:</b> Founded two profitable B2B SaaS companies—one <Kw>YC</Kw>-backed, one scaled to{" "}
-          <Kw>$4M ARR</Kw>
+          <b>Product Leadership:</b> Founded two profitable B2B SaaS companies, both acquired—one <Kw>YC</Kw>-backed,
+          one scaled to <Kw>$4M ARR</Kw>
         </>,
       ],
       closingSection: (
@@ -96,16 +95,25 @@ export const cvCopy: Record<string, CvCopy> = {
         location: "New York, NY",
         period: [new Date(2024, 11), null],
         preamble: (
-          <>Hands-on consulting for early-stage startups on technical architecture, infrastructure, and AI strategy</>
+          <>
+            Hands-on architecture, infrastructure, and AI work for startups and established companies. Three clients in
+            two years, from seed stage to a large healthcare adtech platform
+          </>
         ),
         highlights: [
           <>
-            Seed-stage company: Architected and deployed production <Kw>AWS</Kw> infrastructure (<Kw>Kubernetes</Kw>/
-            <Kw>ArgoCD</Kw>/<Kw>Helm</Kw>), developed initial product UI in <Kw>Next.js</Kw>
+            <b>AdTech company</b>: Built an <Kw>AI agent</Kw> for campaign management from scratch and brought it to
+            production in 2 months (<Kw>Python</Kw>, <Kw>Claude</Kw>, <Kw>MCP</Kw>, <Kw>Next.js</Kw>, <Kw>GCP</Kw>). Led
+            a cross-functional team of 10 (engineers and PMs) while staying hands-on as a top-3 code contributor
           </>,
           <>
-            Series A company: Defined AI strategy, built prototype <Kw>MCP</Kw> server, <Kw>RAG</Kw> pipeline, and{" "}
-            <Kw>AI-Agent</Kw> architecture
+            <b>Seed-stage company (AI observability)</b>: Architected and deployed production <Kw>AWS</Kw>{" "}
+            infrastructure (<Kw>Kubernetes</Kw>/<Kw>ArgoCD</Kw>/<Kw>Helm</Kw>), developed initial product UI in{" "}
+            <Kw>Next.js</Kw>
+          </>,
+          <>
+            <b>Series A company (Data Engineering)</b>: Defined AI strategy, built prototype <Kw>MCP</Kw> server,{" "}
+            <Kw>RAG</Kw> pipeline, and <Kw>AI-Agent</Kw> architecture
           </>,
         ],
         logo: <MonitorCog className="w-full h-full" strokeWidth={1} />,
@@ -115,10 +123,10 @@ export const cvCopy: Record<string, CvCopy> = {
         company: "Jitsu (YC S20)",
         role: "Founder & CEO",
         location: "New York, NY",
-        period: [new Date(2020, 2), null],
+        period: [new Date(2020, 2), new Date(2026, 6)],
         preamble: (
           <>
-            Open-source customer data platform processing billions of events. Customers include large Canadian bank,
+            Open-source customer data platform processing billions of events. Customers include a large Canadian bank, a
             fast-growing US coffee chain, and financial data platforms
           </>
         ),
@@ -128,10 +136,17 @@ export const cvCopy: Record<string, CvCopy> = {
           </>,
           <>
             Led lean engineering team and architected event processing platform from scratch with <Kw>Kafka</Kw>,{" "}
-            <Kw>Go</Kw>, <Kw>ClickHouse</Kw> and <Kw>Typescript</Kw>
+            <Kw>Go</Kw>, <Kw>ClickHouse</Kw>, and a <Kw>TypeScript</Kw>/<Kw>Next.js</Kw> frontend
           </>,
           <>
-            Built production <Kw>TypeScript</Kw>/<Kw>Next.js</Kw> frontend
+            <a
+              href="https://www.linkedin.com/posts/rohitdotmittal_helium-venturesis-excited-to-announce-the-ugcPost-7515624521895415808-k30a/"
+              className="underline"
+              target="_blank"
+            >
+              Acquired by Helium Ventures
+            </a>{" "}
+            in 2026
           </>,
         ],
         logo: <JitsuLogo />,
@@ -145,7 +160,7 @@ export const cvCopy: Record<string, CvCopy> = {
         preamble: (
           <>
             Career break following GetIntent exit. Advised several startups part-time on system architecture and
-            operations.
+            operations
           </>
         ),
       },
@@ -154,7 +169,7 @@ export const cvCopy: Record<string, CvCopy> = {
         role: "Founder & CTO",
         location: "New York, NY",
         period: [new Date(2013, 3), new Date(2018, 4)],
-        preamble: <>Founded online ad-exchange, scaled to $4M ARR and successful exit</>,
+        preamble: <>Founded programmatic ad exchange and grew it to a successful exit</>,
         highlights: [
           <>Raised $1.4M across two rounds, grew company from zero to $4M ARR</>,
           <>
@@ -162,7 +177,7 @@ export const cvCopy: Record<string, CvCopy> = {
             handling 1M requests/second with real-time bidding and optimization
           </>,
           <>
-            Scaled engineering team from zero to 25 engineers, established development processes and technical culture
+            Scaled engineering team from zero to 30 engineers, established development processes and technical culture
           </>,
           <>
             Wore COO hat managing HR, Finance, and Sales departments alongside building product and leading engineering
