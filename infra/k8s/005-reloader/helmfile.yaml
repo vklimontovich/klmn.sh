@@ -1,0 +1,19 @@
+# Restarts workloads when a Secret or ConfigMap they name in an annotation changes.
+# Used by postgres (020-postgres) to load renewed TLS certs.
+repositories:
+  - name: stakater
+    url: https://stakater.github.io/stakater-charts
+
+releases:
+  - name: reloader
+    namespace: reloader
+    createNamespace: true
+    chart: stakater/reloader
+    version: "2.2.18"
+    values:
+      - reloader:
+          # Patch a pod template annotation, not env vars, so helm syncs don't undo it
+          reloadStrategy: annotations
+          deployment:
+            nodeSelector:
+              node-role: app-server
