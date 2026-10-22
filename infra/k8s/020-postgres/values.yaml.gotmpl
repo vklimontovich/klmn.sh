@@ -27,6 +27,14 @@ primary:
   extendedConfiguration: |
     max_connections = 200
 
+  # Network clients must use TLS
+  pgHbaConfiguration: |
+    local all all md5
+    host all all 127.0.0.1/32 md5
+    host all all ::1/128 md5
+    hostssl all all 0.0.0.0/0 md5
+    hostssl all all ::/0 md5
+
   service:
     type: NodePort
     nodePorts:

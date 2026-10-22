@@ -32,7 +32,7 @@ spec:
       containers:
         - name: metabase
           # Keep in sync with the version in the app DB. Upgrades run DB migrations.
-          image: metabase/metabase:v0.50.4
+          image: metabase/metabase:v0.63.20
           ports:
             - containerPort: 3000
           env:
@@ -52,7 +52,8 @@ spec:
               path: /api/health
               port: 3000
             periodSeconds: 10
-            failureThreshold: 30
+            # Version upgrades run long DB migrations
+            failureThreshold: 90
           readinessProbe:
             httpGet:
               path: /api/health

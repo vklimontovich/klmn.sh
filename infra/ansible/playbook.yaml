@@ -6,7 +6,7 @@
     tailscale_auth_key: "{{ lookup('env', 'TAILSCALE_AUTH_KEY') }}"
     k3s_master: "fatman.klmn.sh"
     k3s_master_url: "https://{{ k3s_master }}:6443"
-    k3s_version: "v1.32.3+k3s1"
+    k3s_version: "v1.36.5+k3s1"
 
   tasks:
     - name: Skip disabled hosts

@@ -105,6 +105,7 @@
       flannel-iface: "tailscale0"
       disable:
         - servicelb
+        - traefik
       kubelet-arg:
         - "read-only-port=0"
     dest: /etc/rancher/k3s/config.yaml
