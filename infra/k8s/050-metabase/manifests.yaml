@@ -1,0 +1,86 @@
+# Metabase for DigiFabster (df-bi.grossmargin.io).
+# App DB and data DB: "gm-digifabster" on the shared postgres (020-postgres).
+# DNS for df-bi.grossmargin.io is managed by hand in Cloudflare (A -> fatman), so auto-dns is off.
+#
+# The secret is not in git. Create it with:
+#   kubectl -n metabase create secret generic metabase \
+#     --from-literal=MB_DB_CONNECTION_URI='jdbc:postgresql://postgresql-internal.database.svc.cluster.local:5432/gm-digifabster?ssl=true&sslmode=require&user=gm-digifabster&password=...'
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: metabase
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metabase
+  namespace: metabase
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: metabase
+  template:
+    metadata:
+      labels:
+        app: metabase
+    spec:
+      nodeSelector:
+        node-role: app-server
+      containers:
+        - name: metabase
+          # Keep in sync with the version in the app DB. Upgrades run DB migrations.
+          image: metabase/metabase:v0.50.4
+          ports:
+            - containerPort: 3000
+          env:
+            - name: JAVA_OPTS
+              value: "-Xmx3g"
+          envFrom:
+            - secretRef:
+                name: metabase
+          resources:
+            requests:
+              cpu: 500m
+              memory: 2Gi
+            limits:
+              memory: 4Gi
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            periodSeconds: 30
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: metabase
+  namespace: metabase
+  annotations:
+    internet-gateway/host: "df-bi.grossmargin.io"
+    internet-gateway/auto-dns: "false"
+    internet-gateway/auto-cert: "true"
+    internet-gateway/ip-mode: "node-port"
+spec:
+  type: ClusterIP
+  selector:
+    app: metabase
+  ports:
+    - port: 80
+      targetPort: 3000
