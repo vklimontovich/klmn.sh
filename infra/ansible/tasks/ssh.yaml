@@ -1,0 +1,10 @@
+---
+- name: Disable SSH password login
+  copy:
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+    dest: /etc/ssh/sshd_config.d/00-hardening.conf
+    mode: "0644"
+    validate: /usr/sbin/sshd -t -f %s
+  notify: Reload sshd

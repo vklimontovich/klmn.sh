@@ -67,11 +67,6 @@
       - { port: "8443:9442", proto: tcp, comment: "MTProxy" }
       - { port: "41641", proto: udp, comment: "Tailscale" }
       - { port: "6443", proto: tcp, comment: "k8s API" }
-      - { port: "2379", proto: tcp, comment: "etcd client" }
-      - { port: "2380", proto: tcp, comment: "etcd peer" }
-      - { port: "10250", proto: tcp, comment: "Kubelet" }
-      - { port: "10255", proto: tcp, comment: "Kubelet metrics" }
-      - { port: "8472", proto: udp, comment: "Flannel VXLAN" }
       - { port: "30432", proto: tcp, comment: "NodePort PostgreSQL" }
       - { port: "30548", proto: tcp, comment: "NodePort xray" }
   community.general.ufw:
@@ -80,6 +75,15 @@
     proto: "{{ item.proto }}"
     comment: "{{ item.comment }}"
   loop: "{{ common_ports }}"
+  when: not (out_of_tailnet | default(false))
+
+# Cluster-internal traffic (etcd, kubelet, flannel) goes over Tailscale only
+- name: Allow all traffic on tailscale0 (tailnet nodes)
+  community.general.ufw:
+    rule: allow
+    direction: in
+    interface: tailscale0
+    comment: "Tailnet"
   when: not (out_of_tailnet | default(false))
 
 # Ports for nodes outside tailnet (restricted kubelet access)

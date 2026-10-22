@@ -13,6 +13,20 @@
       meta: end_host
       when: not (enabled | default(true))
 
+    - name: Harden SSH
+      ansible.builtin.include_tasks:
+        file: tasks/ssh.yaml
+        apply:
+          tags: [ssh]
+      tags: [ssh]
+
+    - name: Enable automatic updates
+      ansible.builtin.include_tasks:
+        file: tasks/updates.yaml
+        apply:
+          tags: [updates]
+      tags: [updates]
+
     - name: Install Docker
       ansible.builtin.include_tasks:
         file: tasks/docker.yaml
@@ -32,6 +46,15 @@
         file: tasks/k3s.yaml
         apply:
           tags: [k3s]
+      when: not (k3s_standalone | default(false))
+      tags: [k3s]
+
+    - name: Install standalone K3s
+      ansible.builtin.include_tasks:
+        file: tasks/k3s-standalone.yaml
+        apply:
+          tags: [k3s]
+      when: k3s_standalone | default(false)
       tags: [k3s]
 
     - name: Configure firewall
@@ -39,6 +62,7 @@
         file: tasks/firewall.yaml
         apply:
           tags: [firewall]
+      when: firewall_enabled | default(true)
       tags: [firewall]
 
     - name: Setup xray via Docker (out of tailnet)
@@ -57,6 +81,11 @@
       tags: [manager-user]
 
   handlers:
+    - name: Reload sshd
+      systemd:
+        name: ssh
+        state: reloaded
+
     - name: Reload docker socket
       systemd:
         name: docker.socket
@@ -67,7 +96,7 @@
       systemd:
         name: k3s
         state: restarted
-      when: inventory_hostname in groups['master']
+      when: inventory_hostname in groups['master'] or (k3s_standalone | default(false))
 
     - name: Restart K3s agent
       systemd:

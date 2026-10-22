@@ -105,6 +105,8 @@
       flannel-iface: "tailscale0"
       disable:
         - servicelb
+      kubelet-arg:
+        - "read-only-port=0"
     dest: /etc/rancher/k3s/config.yaml
     mode: "0644"
   when: inventory_hostname in groups['master']
@@ -120,10 +122,12 @@
         - "node-role=vpn-node"
       node-taint:
         - "dedicated=vpn-node:NoSchedule"
+      kubelet-arg:
+        - "read-only-port=0"
     dest: /etc/rancher/k3s/config.yaml
     mode: "0644"
   when: inventory_hostname in groups['workers'] and not (out_of_tailnet | default(false))
-  notify: Restart K3s
+  notify: Restart K3s agent
 
 # flannel binds to tailscale0 (flannel-iface above) but only reads the interface
 # once, at startup. If k3s starts while Tailscale has no address, flannel never
