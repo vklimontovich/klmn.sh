@@ -10,6 +10,15 @@ export type Essay = {
 
 export const essays: Essay[] = [
   {
+    slug: "founder-asymmetry",
+    title: "Founder Asymmetry",
+    mdxFile: "essays/founder-asymmetry.md",
+    subtitle:
+      "Founders and founding engineers take the same risk for similar cash. The equity is not the same — " +
+      "one side gets QSBS-eligible restricted stock, the other gets a tax bill.",
+    date: new Date("2026-05-26"),
+  },
+  {
     slug: "claude-code-for-taxes",
     title: "Claude Code Did My Taxes",
     mdxFile: "essays/cloud-code-for-taxes.md",
