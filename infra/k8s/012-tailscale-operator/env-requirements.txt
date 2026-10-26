@@ -1,0 +1,4 @@
+# OAuth client: https://login.tailscale.com/admin/settings/trust-credentials
+# Scopes: Devices Core, Auth Keys, Services (write). Tag: tag:k8s-operator
+TS_OAUTH_CLIENT_ID
+TS_OAUTH_CLIENT_SECRET

@@ -40,3 +40,9 @@ export ENTER_VLESS_SNI=investing.com
 export ENTER_VLESS_UUID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 export ENTER_VLESS_PUBLIC_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 export ENTER_VLESS_SHORT_ID=xxxxxxxx
+
+# Tailscale k8s operator OAuth client (012-tailscale-operator)
+# Get it: https://login.tailscale.com/admin/settings/trust-credentials
+# Scopes: Devices Core, Auth Keys, Services (write). Tag: tag:k8s-operator
+export TS_OAUTH_CLIENT_ID=xxxxxxxxxxxxxxxxx
+export TS_OAUTH_CLIENT_SECRET=tskey-client-xxxxxxxxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
