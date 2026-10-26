@@ -1,6 +1,4 @@
 repositories:
-  - name: bitnami
-    url: https://charts.bitnami.com/bitnami
   - name: bedag
     url: https://bedag.github.io/helm-charts
 
@@ -8,8 +6,8 @@ releases:
   - name: postgresql
     namespace: database
     createNamespace: true
-    chart: bitnami/postgresql
-    version: "18.5.6"
+    chart: bedag/raw
+    version: "2.0.0"
     values:
       - values.yaml.gotmpl
     hooks:
