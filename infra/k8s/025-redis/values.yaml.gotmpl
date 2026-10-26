@@ -1,0 +1,160 @@
+resources:
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: redis-config
+    data:
+      common.conf: |
+        bind * -::*
+        port 0
+        tls-cert-file /tls/tls.crt
+        tls-key-file /tls/tls.key
+        tls-ca-cert-file /tls/ca.crt
+        tls-auth-clients no
+        dir /data
+        maxmemory 768mb
+        maxmemory-policy noeviction
+      aof.conf: |
+        include /etc/redis/common.conf
+        tls-port 6379
+        appendonly yes
+        appendfsync everysec
+        save ""
+      rdb.conf: |
+        include /etc/redis/common.conf
+        tls-port 6380
+        appendonly no
+        save 3600 1 300 100 60 10000
+
+  - apiVersion: apps/v1
+    kind: StatefulSet
+    metadata:
+      name: redis
+      labels: &labels
+        app.kubernetes.io/name: redis
+      # Restart when cert-manager renews the TLS cert or config changes
+      annotations:
+        secret.reloader.stakater.com/reload: "redis-tls"
+        configmap.reloader.stakater.com/reload: "redis-config"
+    spec:
+      replicas: 1
+      serviceName: redis-hl
+      selector:
+        matchLabels: *labels
+      template:
+        metadata:
+          labels: *labels
+        spec:
+          automountServiceAccountToken: false
+          nodeSelector:
+            node-role: app-server
+          securityContext:
+            runAsUser: 999
+            runAsGroup: 999
+            runAsNonRoot: true
+            fsGroup: 999
+            fsGroupChangePolicy: OnRootMismatch
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+          {{- range $mode, $port := dict "aof" 6379 "rdb" 6380 }}
+            - name: {{ $mode }}
+              image: redis:8.10.2@sha256:97ec88159e6d7cfb5ddef9015386087d58a912de80112f06ebdfa78fa5989901
+              command:
+                - sh
+                - -c
+                - exec redis-server /etc/redis/{{ $mode }}.conf --requirepass "$REDIS_PASSWORD"
+              env:
+                - name: REDIS_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: redis-password
+                      key: password
+              ports:
+                - name: {{ $mode }}
+                  containerPort: {{ $port }}
+                  # Node loopback only, like docker -p 127.0.0.1:port:port
+                  hostPort: {{ $port }}
+                  hostIP: 127.0.0.1
+              readinessProbe: &probe
+                exec:
+                  command:
+                    - sh
+                    - -c
+                    - redis-cli --tls --cacert /tls/ca.crt -h 127.0.0.1 -p {{ $port }} --no-auth-warning -a "$REDIS_PASSWORD" ping | grep -q PONG
+                periodSeconds: 10
+              livenessProbe:
+                <<: *probe
+                initialDelaySeconds: 30
+                failureThreshold: 6
+              resources:
+                requests:
+                  memory: 256Mi
+                  cpu: 100m
+                limits:
+                  memory: 1Gi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: data-{{ $mode }}
+                  mountPath: /data
+                - name: config
+                  mountPath: /etc/redis
+                - name: tls
+                  mountPath: /tls
+          {{- end }}
+          volumes:
+            - name: config
+              configMap:
+                name: redis-config
+            - name: tls
+              secret:
+                secretName: redis-tls
+                defaultMode: 0440
+      volumeClaimTemplates:
+      {{- range list "aof" "rdb" }}
+        - apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata:
+            name: data-{{ . }}
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            storageClassName: local-path
+            resources:
+              requests:
+                storage: 5Gi
+      {{- end }}
+
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: redis
+    spec:
+      type: ClusterIP
+      selector: *labels
+      ports:
+        - name: aof
+          port: 6379
+          targetPort: aof
+        - name: rdb
+          port: 6380
+          targetPort: rdb
+
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: redis-hl
+    spec:
+      clusterIP: None
+      selector: *labels
+      ports:
+        - name: aof
+          port: 6379
+          targetPort: aof
+        - name: rdb
+          port: 6380
+          targetPort: rdb
+

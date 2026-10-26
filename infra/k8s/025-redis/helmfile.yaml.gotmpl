@@ -1,0 +1,94 @@
+# Two Redis servers in one pod, one Service:
+#   redis.redis.svc:6379  AOF (appendfsync everysec)
+#   redis.redis.svc:6380  RDB snapshots
+# Cluster-internal only, plus 127.0.0.1:6379/6380 on the node (hostPort).
+# NodePorts would be public: ufw does not filter them.
+# TLS only, password in secret redis-password.
+# Clients verify the server with ca.crt from secret redis-tls.
+repositories:
+  - name: bedag
+    url: https://bedag.github.io/helm-charts
+
+releases:
+  - name: redis-tls
+    namespace: redis
+    createNamespace: true
+    chart: bedag/raw
+    version: "2.0.0"
+    values:
+      - resources:
+          - apiVersion: cert-manager.io/v1
+            kind: Issuer
+            metadata:
+              name: selfsigned
+            spec:
+              selfSigned: {}
+
+          - apiVersion: cert-manager.io/v1
+            kind: Certificate
+            metadata:
+              name: redis-ca
+            spec:
+              isCA: true
+              commonName: redis-ca
+              secretName: redis-ca
+              duration: 87600h
+              privateKey:
+                algorithm: ECDSA
+                size: 256
+              issuerRef:
+                name: selfsigned
+                kind: Issuer
+
+          - apiVersion: cert-manager.io/v1
+            kind: Issuer
+            metadata:
+              name: redis-ca
+            spec:
+              ca:
+                secretName: redis-ca
+
+          - apiVersion: cert-manager.io/v1
+            kind: Certificate
+            metadata:
+              name: redis-tls
+            spec:
+              secretName: redis-tls
+              privateKey:
+                algorithm: ECDSA
+                size: 256
+              dnsNames:
+                - redis
+                - redis.redis
+                - redis.redis.svc
+                - redis.redis.svc.cluster.local
+                - localhost
+              ipAddresses:
+                - 127.0.0.1
+              issuerRef:
+                name: redis-ca
+                kind: Issuer
+
+  - name: redis
+    namespace: redis
+    chart: bedag/raw
+    version: "2.0.0"
+    needs:
+      - redis/redis-tls
+    values:
+      - values.yaml.gotmpl
+    hooks:
+      - events: ["presync"]
+        showlogs: true
+        command: "/bin/bash"
+        args:
+          - "-c"
+          - |
+            set -e
+            NS=redis
+            kubectl create namespace $NS --dry-run=client -o yaml | kubectl apply -f -
+            if ! kubectl get secret redis-password -n $NS >/dev/null 2>&1; then
+              echo "Creating redis-password secret..."
+              kubectl create secret generic redis-password -n $NS \
+                --from-literal=password="$(openssl rand -hex 24)"
+            fi
