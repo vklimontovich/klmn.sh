@@ -20,16 +20,18 @@ Required annotations on Service:
   internet-gateway/auto-cert: "true"      # optional
   internet-gateway/protocol: "http|tcp"   # optional, default: http
   internet-gateway/ip-mode: "node-port"   # optional, auto-detect node IPs
-  internet-gateway/allow-from: "cloudflare"  # optional, "cloudflare" or comma-separated CIDRs
+  internet-gateway/allow-from: "cloudflare"  # optional, "cloudflare" (list from the Cloudflare API) or comma-separated CIDRs
 
 Environment variables (from secrets):
   CLOUDFLARE_API_KEY - API token with Zone:Read and DNS:Edit permissions
 """
 
+import json
 import logging
 import os
 import sys
 import time
+import urllib.request
 from dataclasses import dataclass
 
 import cloudflare
@@ -50,15 +52,39 @@ ANN_PROTOCOL = "internet-gateway/protocol"  # "http" (default) or "tcp"
 ANN_IP_MODE = "internet-gateway/ip-mode"  # "node-port" to auto-detect node IPs
 ANN_ALLOW_FROM = "internet-gateway/allow-from"  # "cloudflare" or comma-separated CIDRs
 
-# https://www.cloudflare.com/ips/
-CLOUDFLARE_CIDRS = [
-    "173.245.48.0/20", "103.21.244.0/22", "103.22.200.0/22", "103.31.4.0/22",
-    "141.101.64.0/18", "108.162.192.0/18", "190.93.240.0/20", "188.114.96.0/20",
-    "197.234.240.0/22", "198.41.128.0/17", "162.158.0.0/15", "104.16.0.0/13",
-    "104.24.0.0/14", "172.64.0.0/13", "131.0.72.0/22",
-    "2400:cb00::/32", "2606:4700::/32", "2803:f800::/32", "2405:b500::/32",
-    "2405:8100::/32", "2a06:98c0::/29", "2c0f:f248::/32",
-]
+CLOUDFLARE_IPS_URL = "https://api.cloudflare.com/client/v4/ips"
+CLOUDFLARE_IPS_REFRESH_S = 24 * 3600
+CLOUDFLARE_IPS_RETRY_S = 300
+
+
+class CloudflareIps:
+    """Cloudflare CIDRs from the Cloudflare API. A failed load keeps the last list."""
+
+    def __init__(self):
+        self.cidrs: list[str] | None = None
+        self._next_load = 0.0
+
+    def get(self) -> list[str] | None:
+        """Loads the list when it is due. None until the first load succeeds."""
+        if time.time() < self._next_load:
+            return self.cidrs
+        try:
+            with urllib.request.urlopen(CLOUDFLARE_IPS_URL, timeout=10) as res:
+                result = json.load(res)["result"]
+            cidrs = result["ipv4_cidrs"] + result["ipv6_cidrs"]
+            if not cidrs:
+                raise ValueError("empty list")
+            if cidrs != self.cidrs:
+                log.info(f"Cloudflare IPs loaded: {len(cidrs)} CIDRs")
+            self.cidrs = cidrs
+            self._next_load = time.time() + CLOUDFLARE_IPS_REFRESH_S
+        except Exception as e:
+            log.warning(f"Cloudflare IPs load failed, retry in {CLOUDFLARE_IPS_RETRY_S}s: {e}")
+            self._next_load = time.time() + CLOUDFLARE_IPS_RETRY_S
+        return self.cidrs
+
+
+cloudflare_ips = CloudflareIps()
 
 # Cert-manager issuer name (must exist in cluster)
 CLUSTER_ISSUER = os.getenv("CLUSTER_ISSUER", "letsencrypt-prod")
@@ -92,7 +118,7 @@ def parse_service(svc: client.V1Service, pod_node_ips: list[str]) -> ServiceConf
     ip_mode = annotations.get(ANN_IP_MODE)
     allow_value = annotations.get(ANN_ALLOW_FROM, "").strip()
     if allow_value.lower() == "cloudflare":
-        allow_from = CLOUDFLARE_CIDRS
+        allow_from = cloudflare_ips.get() or []
     else:
         allow_from = [c.strip() for c in allow_value.split(",") if c.strip()]
 
@@ -542,6 +568,11 @@ class Operator:
 
         annotations = svc.metadata.annotations or {}
         protocol = annotations.get(ANN_PROTOCOL, "http").lower()
+
+        # Without the list, the Ingress would accept all sources. Keep it as is until the next resync.
+        if annotations.get(ANN_ALLOW_FROM, "").strip().lower() == "cloudflare" and cloudflare_ips.get() is None:
+            log.warning(f"Service {key}: no Cloudflare IPs yet, skipped")
+            return
 
         # For auto-cert + http, use ingress controller IPs
         # For tcp or node-port, use pod node IPs

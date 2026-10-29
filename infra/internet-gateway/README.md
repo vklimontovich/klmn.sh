@@ -87,7 +87,7 @@ spec:
 | `internet-gateway/auto-cert` | No | If `true`, manages TLS via cert-manager |
 | `internet-gateway/protocol` | No | `http` (default) — creates Ingress; `tcp` — creates Certificate CR |
 | `internet-gateway/ip-mode` | No | `node-port` to auto-detect node IPs (creates round-robin DNS) |
-| `internet-gateway/allow-from` | No | `cloudflare` or comma-separated CIDRs. Other sources get 403 (HTTP only) |
+| `internet-gateway/allow-from` | No | `cloudflare` or comma-separated CIDRs. Other sources get 403 (HTTP only). The `cloudflare` list comes from the [Cloudflare API](https://api.cloudflare.com/client/v4/ips), reloaded once a day |
 
 ### Requirements
 
