@@ -30,6 +30,11 @@ releases:
           service:
             type: ClusterIP
           kind: DaemonSet
+          # Compress text responses (JS, CSS, JSON, HTML) for all services.
+          config:
+            use-gzip: "true"
+            gzip-level: "5"
+            enable-brotli: "true"
 
   - name: cluster-issuer
     namespace: cert-manager

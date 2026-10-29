@@ -20,6 +20,7 @@ Required annotations on Service:
   internet-gateway/auto-cert: "true"      # optional
   internet-gateway/protocol: "http|tcp"   # optional, default: http
   internet-gateway/ip-mode: "node-port"   # optional, auto-detect node IPs
+  internet-gateway/allow-from: "cloudflare"  # optional, "cloudflare" or comma-separated CIDRs
 
 Environment variables (from secrets):
   CLOUDFLARE_API_KEY - API token with Zone:Read and DNS:Edit permissions
@@ -47,6 +48,17 @@ ANN_AUTO_DNS = "internet-gateway/auto-dns"
 ANN_AUTO_CERT = "internet-gateway/auto-cert"
 ANN_PROTOCOL = "internet-gateway/protocol"  # "http" (default) or "tcp"
 ANN_IP_MODE = "internet-gateway/ip-mode"  # "node-port" to auto-detect node IPs
+ANN_ALLOW_FROM = "internet-gateway/allow-from"  # "cloudflare" or comma-separated CIDRs
+
+# https://www.cloudflare.com/ips/
+CLOUDFLARE_CIDRS = [
+    "173.245.48.0/20", "103.21.244.0/22", "103.22.200.0/22", "103.31.4.0/22",
+    "141.101.64.0/18", "108.162.192.0/18", "190.93.240.0/20", "188.114.96.0/20",
+    "197.234.240.0/22", "198.41.128.0/17", "162.158.0.0/15", "104.16.0.0/13",
+    "104.24.0.0/14", "172.64.0.0/13", "131.0.72.0/22",
+    "2400:cb00::/32", "2606:4700::/32", "2803:f800::/32", "2405:b500::/32",
+    "2405:8100::/32", "2a06:98c0::/29", "2c0f:f248::/32",
+]
 
 # Cert-manager issuer name (must exist in cluster)
 CLUSTER_ISSUER = os.getenv("CLUSTER_ISSUER", "letsencrypt-prod")
@@ -63,6 +75,7 @@ class ServiceConfig:
     ip_mode: str | None  # "node-port" or None (for LoadBalancer)
     external_ips: list[str]  # Can have multiple IPs for round-robin DNS
     port: int
+    allow_from: list[str]  # Source CIDRs for the Ingress, empty = all
 
 
 def parse_service(svc: client.V1Service, pod_node_ips: list[str]) -> ServiceConfig | None:
@@ -77,6 +90,11 @@ def parse_service(svc: client.V1Service, pod_node_ips: list[str]) -> ServiceConf
     auto_cert = annotations.get(ANN_AUTO_CERT, "").lower() == "true"
     protocol = annotations.get(ANN_PROTOCOL, "http").lower()
     ip_mode = annotations.get(ANN_IP_MODE)
+    allow_value = annotations.get(ANN_ALLOW_FROM, "").strip()
+    if allow_value.lower() == "cloudflare":
+        allow_from = CLOUDFLARE_CIDRS
+    else:
+        allow_from = [c.strip() for c in allow_value.split(",") if c.strip()]
 
     external_ips: list[str] = []
 
@@ -107,6 +125,7 @@ def parse_service(svc: client.V1Service, pod_node_ips: list[str]) -> ServiceConf
         ip_mode=ip_mode,
         external_ips=external_ips,
         port=port,
+        allow_from=allow_from,
     )
 
 
@@ -263,6 +282,8 @@ class IngressManager:
                     "cert-manager.io/cluster-issuer": CLUSTER_ISSUER,
                     "nginx.ingress.kubernetes.io/ssl-redirect": "true",
                     "nginx.ingress.kubernetes.io/proxy-body-size": "50m",
+                    # Other sources get 403. ACME challenges use a separate Ingress, so cert renewal still works.
+                    **({"nginx.ingress.kubernetes.io/whitelist-source-range": ",".join(cfg.allow_from)} if cfg.allow_from else {}),
                 },
                 labels={
                     "app.kubernetes.io/managed-by": "internet-gateway",
